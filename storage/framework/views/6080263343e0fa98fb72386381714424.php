@@ -1,0 +1,647 @@
+<?php $__env->startSection('content'); ?>
+
+    <div class="pagetitle">
+        <h1>Dashboard Analitik Publikasi Karya</h1>
+        <nav>
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="<?php echo e(route('dashboard')); ?>">Home</a></li>
+                <li class="breadcrumb-item active">Dashboard Analitik</li>
+            </ol>
+        </nav>
+    </div>
+
+    <section class="section dashboard">
+        <!-- Filter Global -->
+        <div class="card mb-3 shadow-sm border-0">
+            <div class="card-body py-3">
+                <form method="GET" action="<?php echo e(url()->current()); ?>" class="row g-2 align-items-end">
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label small fw-bold text-secondary">Dari Tanggal</label>
+                        <input type="date" name="tanggal_dari" class="form-control form-control-sm"
+                            value="<?php echo e(request('tanggal_dari')); ?>">
+                    </div>
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label small fw-bold text-secondary">Sampai Tanggal</label>
+                        <input type="date" name="tanggal_sampai" class="form-control form-control-sm"
+                            value="<?php echo e(request('tanggal_sampai')); ?>">
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <label class="form-label small fw-bold text-secondary">Perguruan Tinggi</label>
+                        <select name="perguruan_tinggi_id" class="form-select form-select-sm">
+                            <option value="">-- Semua Perguruan Tinggi --</option>
+                            <?php $__currentLoopData = $perguruanTinggiList; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $pt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                <option value="<?php echo e($pt->id); ?>" <?php echo e(request('perguruan_tinggi_id') == $pt->id ? 'selected' : ''); ?>>
+                                    <?php echo e($pt->nama_pt); ?></option>
+                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <label class="form-label small fw-bold text-secondary">Kategori Capaian</label>
+                        <select name="kategori_capaian" class="form-select form-select-sm">
+                            <option value="">-- Semua Kategori Capaian --</option>
+                            <option value="Publikasi" <?php echo e(request('kategori_capaian') == 'Publikasi' ? 'selected' : ''); ?>>
+                                Publikasi</option>
+                            <option value="Produk Teknologi Tepat Guna" <?php echo e(request('kategori_capaian') == 'Produk Teknologi Tepat Guna' ? 'selected' : ''); ?>>Produk Teknologi Tepat Guna</option>
+                            <option value="Jenis Luaran Lainnya" <?php echo e(request('kategori_capaian') == 'Jenis Luaran Lainnya' ? 'selected' : ''); ?>>Jenis Luaran Lainnya</option>
+                            <option value="HKI" <?php echo e(request('kategori_capaian') == 'HKI' ? 'selected' : ''); ?>>HKI</option>
+                            <option value="Buku" <?php echo e(request('kategori_capaian') == 'Buku' ? 'selected' : ''); ?>>Buku</option>
+                            <option value="Pembicara" <?php echo e(request('kategori_capaian') == 'Pembicara' ? 'selected' : ''); ?>>
+                                Pembicara</option>
+                            <option value="Visiting Scientist" <?php echo e(request('kategori_capaian') == 'Visiting Scientist' ? 'selected' : ''); ?>>Visiting Scientist</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-sm-12 d-flex gap-1">
+                        <button type="submit" class="btn btn-sm btn-primary flex-fill">
+                            <i class="bi bi-funnel-fill"></i> Filter
+                        </button>
+                        <a href="<?php echo e(url()->current()); ?>" class="btn btn-sm btn-outline-secondary" title="Reset Filter">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- KPI Cards (Row Atas) -->
+        <div class="row g-3 mb-3">
+            <!-- 1. Total Publikasi -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #0d6efd !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">TOTAL PUBLIKASI</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-primary-light text-primary p-2 rounded-circle me-3">
+                                <i class="bi bi-journal-bookmark-fill fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($totalPublikasi); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Publikasi Tahun Ini -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #198754 !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">TAHUN INI</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-success-light text-success p-2 rounded-circle me-3">
+                                <i class="bi bi-calendar-check fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($publikasiTahunIni); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Total Dokumen -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #0dcaf0 !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">DOKUMEN</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-info-light text-info p-2 rounded-circle me-3">
+                                <i class="bi bi-file-earmark-pdf fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($totalDokumen); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Dosen Penulis Aktif -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #ffc107 !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">DOSEN AKTIF</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-warning-light text-warning p-2 rounded-circle me-3">
+                                <i class="bi bi-person-badge fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($dosenAktif); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Mahasiswa Penulis Aktif -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #6f42c1 !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">MAHASISWA AKTIF</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-purple-light text-purple p-2 rounded-circle me-3">
+                                <i class="bi bi-person-workspace fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($mahasiswaAktif); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Rata-rata Penulis -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #fd7e14 !important;">
+                    <div class="card-body py-3">
+                        <div class="text-muted small fw-bold">RATA PENULIS</div>
+                        <div class="d-flex align-items-center mt-2">
+                            <div class="badge bg-orange-light text-orange p-2 rounded-circle me-3">
+                                <i class="bi bi-people fs-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-0 fw-bold"><?php echo e($rataPenulis); ?></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="row g-3 mb-3">
+            <!-- Line Chart: Tren Bulanan -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-graph-up text-primary"></i> Tren Publikasi
+                            per Bulan</h6>
+                        <div style="position: relative; height: 320px;">
+                            <canvas id="trenChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Donut Chart: Kategori Capaian -->
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-pie-chart text-primary"></i> Kategori
+                            Capaian</h6>
+                        <div
+                            style="position: relative; height: 320px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="capaianChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="row g-3 mb-3">
+            <!-- Bar Chart: Kategori Kegiatan Grouped -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-bar-chart-steps text-primary"></i> Publikasi
+                            per Kategori Kegiatan</h6>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="kategoriChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Donut Chart: Proporsi Penulis -->
+            <div class="col-lg-3">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-people-fill text-primary"></i> Proporsi
+                            Jenis Penulis</h6>
+                        <div
+                            style="position: relative; height: 300px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="proporsiChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Donut Chart: Distribusi Jenis Dokumen -->
+            <div class="col-lg-3">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-file-earmark-bar-graph text-primary"></i>
+                            Distribusi Jenis Dokumen</h6>
+                        <div
+                            style="position: relative; height: 300px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="docDistChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 3 -->
+        <div class="row g-3 mb-3">
+            <!-- Bar Chart: Distribusi Publikasi Berdasarkan Jenis Publikasi -->
+            <div class="col-lg-12">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-journal-text text-primary"></i> Distribusi
+                            Publikasi Berdasarkan Jenis Publikasi</h6>
+                        <div style="position: relative; height: 350px;">
+                            <canvas id="jenisPublikasiChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboards Row 1 -->
+        <div class="row g-3 mb-3">
+            <!-- 1. Dosen Paling Produktif -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-award text-warning"></i> Top 10 Dosen Paling
+                            Produktif</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle small mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%">No</th>
+                                        <th>NIDN</th>
+                                        <th>Nama Dosen</th>
+                                        <th class="text-end" style="width: 20%">Publikasi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php $__empty_1 = true; $__currentLoopData = $topDosen; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $idx => $d): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                        <tr>
+                                            <td><?php echo e($idx + 1); ?></td>
+                                            <td><code><?php echo e($d->nidn); ?></code></td>
+                                            <td><?php echo e($d->nama); ?></td>
+                                            <td class="text-end fw-bold text-primary"><?php echo e($d->jumlah); ?></td>
+                                        </tr>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted">Belum ada data kontribusi.</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Mahasiswa Paling Produktif -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-award text-success"></i> Top 10 Mahasiswa
+                            Paling Produktif</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle small mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%">No</th>
+                                        <th>NIM</th>
+                                        <th>Nama Mahasiswa</th>
+                                        <th>Prodi</th>
+                                        <th class="text-end" style="width: 15%">Publikasi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php $__empty_1 = true; $__currentLoopData = $topMahasiswa; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $idx => $m): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                        <tr>
+                                            <td><?php echo e($idx + 1); ?></td>
+                                            <td><code><?php echo e($m->nim); ?></code></td>
+                                            <td><?php echo e($m->nama); ?></td>
+                                            <td><?php echo e($m->prodi ?? '-'); ?></td>
+                                            <td class="text-end fw-bold text-success"><?php echo e($m->jumlah); ?></td>
+                                        </tr>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">Belum ada data kontribusi.</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboards Row 2 -->
+        <div class="row g-3 mb-3">
+            <!-- 3. Perguruan Tinggi Kontributor -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-building text-info"></i> Kontribusi per
+                            Perguruan Tinggi</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle small mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%">No</th>
+                                        <th>Nama Perguruan Tinggi</th>
+                                        <th class="text-end" style="width: 25%">Total Kontribusi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php $__empty_1 = true; $__currentLoopData = $topPT; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $idx => $pt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                        <tr>
+                                            <td><?php echo e($idx + 1); ?></td>
+                                            <td><?php echo e($pt->nama_pt); ?></td>
+                                            <td class="text-end fw-bold text-info"><?php echo e($pt->jumlah); ?></td>
+                                        </tr>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted">Belum ada data kontribusi PT.</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Jurnal Terpopuler -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100 bg-white">
+                    <div class="card-body py-3">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-bookmark-star text-danger"></i> Top 10
+                            Jurnal Terpopuler</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle small mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 8%">No</th>
+                                        <th>Nama Jurnal</th>
+                                        <th class="text-end" style="width: 25%">Total Artikel</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php $__empty_1 = true; $__currentLoopData = $topJurnal; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $idx => $j): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                        <tr>
+                                            <td><?php echo e($idx + 1); ?></td>
+                                            <td><?php echo e($j->nama_jurnal); ?></td>
+                                            <td class="text-end fw-bold text-danger"><?php echo e($j->jumlah); ?></td>
+                                        </tr>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted">Belum ada data jurnal.</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Kelengkapan Data -->
+        <div class="card border-0 shadow-sm bg-white mt-3">
+            <div class="card-body py-3">
+                <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-shield-exclamation text-warning"></i> Kelengkapan
+                    Data & Kualitas</h6>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded bg-light-warning d-flex align-items-center">
+                            <div class="fs-1 text-warning me-3"><i class="bi bi-link-45deg"></i></div>
+                            <div>
+                                <div class="small text-muted fw-bold">PUBLIKASI TANPA DOI</div>
+                                <h3 class="mb-0 fw-bold"><?php echo e($countTanpaDoi); ?></h3>
+                                <small class="text-secondary">Memerlukan input DOI untuk sitasi ilmiah.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="p-3 border rounded bg-light h-100">
+                            <div class="fw-bold mb-2 small text-secondary">Daftar Publikasi Tanpa DOI (Maksimal 10 Terbaru)
+                            </div>
+                            <ul class="list-unstyled mb-0 small">
+                                <?php $__empty_1 = true; $__currentLoopData = $publikasiTanpaDoi; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $ptd): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                                    <li class="mb-1 d-flex justify-content-between align-items-center">
+                                        <span class="text-truncate" style="max-width: 80%"><i
+                                                class="bi bi-file-earmark-text me-1 text-secondary"></i>
+                                            <?php echo e($ptd->judul); ?></span>
+                                        <a href="<?php echo e(route('publikasi.edit', $ptd->id)); ?>"
+                                            class="btn btn-sm btn-link py-0 fw-bold text-decoration-none">
+                                            Lengkapi <i class="bi bi-arrow-right"></i>
+                                        </a>
+                                    </li>
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                                    <li class="text-muted"><i class="bi bi-check-circle-fill text-success me-1"></i> Semua
+                                        publikasi sudah terisi DOI!</li>
+                                <?php endif; ?>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Custom Styling for badge background -->
+    <style>
+        .bg-primary-light {
+            background-color: rgba(13, 110, 253, 0.1);
+        }
+
+        .bg-success-light {
+            background-color: rgba(25, 135, 84, 0.1);
+        }
+
+        .bg-info-light {
+            background-color: rgba(13, 202, 240, 0.1);
+        }
+
+        .bg-warning-light {
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+
+        .bg-purple-light {
+            background-color: rgba(111, 66, 193, 0.1);
+        }
+
+        .bg-orange-light {
+            background-color: rgba(253, 126, 20, 0.1);
+        }
+
+        .bg-light-warning {
+            background-color: #fffdf5;
+            border-color: #ffecb5 !important;
+        }
+
+        .text-purple {
+            color: #6f42c1;
+        }
+
+        .text-orange {
+            color: #fd7e14;
+        }
+    </style>
+
+<?php $__env->stopSection(); ?>
+
+<?php $__env->startPush('scripts'); ?>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // 1. Line Chart: Tren Bulanan
+            const ctxTren = document.getElementById('trenChart').getContext('2d');
+            new Chart(ctxTren, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($trenLabels); ?>,
+                    datasets: [{
+                        label: 'Jumlah Publikasi',
+                        data: <?php echo json_encode($trenData); ?>,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.05)',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#0d6efd'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                }
+            });
+
+            // Helper options for pie/doughnut charts
+            const donutOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    }
+                }
+            };
+
+            // 2. Doughnut Chart: Kategori Capaian
+            const ctxCapaian = document.getElementById('capaianChart').getContext('2d');
+            new Chart(ctxCapaian, {
+                type: 'doughnut',
+                data: {
+                    labels: <?php echo json_encode($capaianLabels); ?>,
+                    datasets: [{
+                        data: <?php echo json_encode($capaianData); ?>,
+                        backgroundColor: ['#0d6efd', '#198754', '#0dcaf0', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#6c757d']
+                    }]
+                },
+                options: donutOptions
+            });
+
+            // 3. Bar Chart: Kategori Kegiatan Grouped
+            const ctxKategori = document.getElementById('kategoriChart').getContext('2d');
+            new Chart(ctxKategori, {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode(array_keys($grupKategori)); ?>,
+                    datasets: [{
+                        label: 'Artikel',
+                        data: <?php echo json_encode(array_values($grupKategori)); ?>,
+                        backgroundColor: ['#0d6efd', '#ffc107', '#fd7e14', '#198754'],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        },
+                        x: {
+                            ticks: { font: { size: 9 } }
+                        }
+                    }
+                }
+            });
+
+            // 4. Doughnut Chart: Proporsi Penulis
+            const ctxProporsi = document.getElementById('proporsiChart').getContext('2d');
+            new Chart(ctxProporsi, {
+                type: 'doughnut',
+                data: {
+                    labels: <?php echo json_encode($proporsiLabels); ?>,
+                    datasets: [{
+                        data: <?php echo json_encode($proporsiData); ?>,
+                        backgroundColor: ['#ffc107', '#6f42c1', '#0dcaf0']
+                    }]
+                },
+                options: donutOptions
+            });
+
+            // 6. Bar Chart: Distribusi Publikasi Berdasarkan Jenis Publikasi
+            const ctxJenisPublikasi = document.getElementById('jenisPublikasiChart').getContext('2d');
+            new Chart(ctxJenisPublikasi, {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($jenisPublikasiLabels); ?>,
+                    datasets: [{
+                        label: 'Jumlah Publikasi',
+                        data: <?php echo json_encode($jenisPublikasiData); ?>,
+                        backgroundColor: '#0d6efd',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                }
+            });
+
+            // 5. Doughnut Chart: Distribusi Jenis Dokumen
+            const ctxDocDist = document.getElementById('docDistChart').getContext('2d');
+            new Chart(ctxDocDist, {
+                type: 'doughnut',
+                data: {
+                    labels: <?php echo json_encode($docDistLabels); ?>,
+                    datasets: [{
+                        data: <?php echo json_encode($docDistData); ?>,
+                        backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#6c757d']
+                    }]
+                },
+                options: donutOptions
+            });
+        });
+    </script>
+<?php $__env->stopPush(); ?>
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH D:\project\simantap\ris-ukri\resources\views/dashboard-analitik/index.blade.php ENDPATH**/ ?>
