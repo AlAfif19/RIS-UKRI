@@ -8,6 +8,18 @@ use App\Models\Dosen;
 use App\Models\Mahasiswa;
 use App\Models\MasterAktivitasLitabmas;
 
+/**
+ * DEPRECATED - berisi data contoh/dummy (dosen, mahasiswa, publikasi demo)
+ * yang dipakai untuk development awal, SEBELUM integrasi Master Data API
+ * UKRI. Sudah tidak dipanggil dari DatabaseSeeder.
+ *
+ * Data dosen & mahasiswa asli sekarang didapat dari `php artisan ukri:sync`.
+ * Untuk membersihkan data demo yang sudah kadung dibuat sebelum integrasi
+ * ini di database yang sudah berjalan, pakai:
+ *   php artisan ukri:reconcile-authors --delete-demo --apply
+ *
+ * File ini dibiarkan sebagai referensi historis, jangan dipanggil lagi.
+ */
 class PublikasiMasterSeeder extends Seeder
 {
     public function run(): void
@@ -17,6 +29,7 @@ class PublikasiMasterSeeder extends Seeder
         $pt2 = MasterPerguruanTinggi::firstOrCreate(['kode_pt' => '071020'], ['nama_pt' => 'Universitas PGRI Ronggolawe']);
         $pt3 = MasterPerguruanTinggi::firstOrCreate(['kode_pt' => '041012'], ['nama_pt' => 'Universitas Nurtanio Bandung']);
         $pt4 = MasterPerguruanTinggi::firstOrCreate(['kode_pt' => '111005'], ['nama_pt' => 'Universitas Muhammadiyah Banjarmasin']);
+
 
         // 2. Seed Dosen
         Dosen::firstOrCreate(['nidn' => '0454768669130262'], [

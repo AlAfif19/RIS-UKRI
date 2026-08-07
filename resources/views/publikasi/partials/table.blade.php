@@ -1,15 +1,15 @@
 <div class="table-responsive">
-    <table class="table table-striped align-middle">
+    <table class="table table-striped align-middle" style="min-width: 1150px;">
         <thead>
             <tr>
-                <th>No</th>
-                <th>Judul Artikel</th>
-                <th>Kategori Kegiatan</th>
-                <th>Jenis</th>
-                <th>Tanggal Terbit</th>
-                <th>Penulis</th>
-                <th>Dokumen</th>
-                <th class="text-center">Aksi</th>
+                <th style="width: 45px;">No</th>
+                <th style="width: 26%;">Judul Artikel</th>
+                <th style="width: 16%;">Kategori Kegiatan</th>
+                <th style="width: 90px;">Jenis</th>
+                <th style="width: 110px;" class="text-nowrap">Tanggal Terbit</th>
+                <th style="width: 22%;">Penulis</th>
+                <th style="width: 100px;">Dokumen</th>
+                <th style="width: 120px;" class="text-center">Aksi</th>
             </tr>
         </thead>
         <tbody>
@@ -23,8 +23,11 @@
                         @endif
                     </td>
                     <td><small>{{ Str::limit($pub->kategori_kegiatan, 60) }}</small></td>
-                    <td><span class="badge bg-info text-dark">{{ $pub->jenis ?? '-' }}</span></td>
-                    <td>{{ \Carbon\Carbon::parse($pub->tanggal_terbit)->format('d-m-Y') }}</td>
+                    <td>
+                        <span class="badge bg-info text-dark d-inline-block text-truncate" style="max-width: 100%;"
+                            title="{{ $pub->jenis }}">{{ Str::limit($pub->jenis ?? '-', 18) }}</span>
+                    </td>
+                    <td class="text-nowrap">{{ \Carbon\Carbon::parse($pub->tanggal_terbit)->format('d-m-Y') }}</td>
                     <td>
                         <small>
                             @foreach($pub->penulisDosen as $pd)
@@ -41,12 +44,12 @@
                     <td>
                         <span class="badge bg-secondary">{{ $pub->dokumen->count() }} Dokumen</span>
                     </td>
-                    <td class="text-center">
+                    <td class="text-center text-nowrap">
                         <div class="btn-group" role="group">
                             <a href="{{ route('publikasi.show', $pub->id) }}" class="btn btn-sm btn-info text-white" title="Lihat Detail">
                                 <i class="bi bi-eye"></i>
                             </a>
-                            <a href="{{ route('publikasi.edit', $pub->id) }}" class="btn btn-sm btn-warning text-white" title="Edit">
+                            <a href="{{ route('publikasi.edit', ['publikasi' => $pub->id, 'page' => $publikasiList->currentPage(), 'search' => request('search')]) }}" class="btn btn-sm btn-warning text-white" title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form action="{{ route('publikasi.destroy', $pub->id) }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus publikasi ini?')" class="d-inline">

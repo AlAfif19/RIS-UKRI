@@ -20,6 +20,14 @@ class DatabaseSeeder extends Seeder
         //     'name' => 'Test User',
         //     'email' => 'test@example.com',
         // ]);
-        $this->call(PublikasiMasterSeeder::class);
+
+        // PublikasiMasterSeeder berisi data contoh/dummy (dosen, mahasiswa,
+        // publikasi demo) yang dipakai saat awal development, SEBELUM
+        // integrasi Master Data API UKRI. Sekarang data dosen & mahasiswa
+        // asli didapat dari `php artisan ukri:sync`, jadi seeder ini sengaja
+        // tidak dijalankan lagi di instalasi baru. Untuk data lama yang
+        // sudah kadung dibuat sebelum integrasi ini, bersihkan lewat:
+        //   php artisan ukri:reconcile-authors --delete-demo --apply
+        // $this->call(PublikasiMasterSeeder::class);
     }
 }

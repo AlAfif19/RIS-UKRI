@@ -16,20 +16,20 @@
         <!-- Filter Global -->
         <div class="card mb-3 shadow-sm border-0">
             <div class="card-body py-3">
-                <form method="GET" action="{{ url()->current() }}" class="row g-2 align-items-end">
+                <form id="filterForm" method="GET" action="{{ url()->current() }}" class="row g-2 align-items-end">
                     <div class="col-md-2 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Dari Tanggal</label>
-                        <input type="date" name="tanggal_dari" class="form-control form-control-sm"
+                        <input type="date" name="tanggal_dari" id="filter-tanggal-dari" class="form-control form-control-sm"
                             value="{{ request('tanggal_dari') }}">
                     </div>
                     <div class="col-md-2 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Sampai Tanggal</label>
-                        <input type="date" name="tanggal_sampai" class="form-control form-control-sm"
+                        <input type="date" name="tanggal_sampai" id="filter-tanggal-sampai" class="form-control form-control-sm"
                             value="{{ request('tanggal_sampai') }}">
                     </div>
                     <div class="col-md-3 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Perguruan Tinggi</label>
-                        <select name="perguruan_tinggi_id" class="form-select form-select-sm">
+                        <select name="perguruan_tinggi_id" id="filter-perguruan-tinggi" class="form-select form-select-sm">
                             <option value="">-- Semua Perguruan Tinggi --</option>
                             @foreach($perguruanTinggiList as $pt)
                                 <option value="{{ $pt->id }}" {{ request('perguruan_tinggi_id') == $pt->id ? 'selected' : '' }}>
@@ -39,7 +39,7 @@
                     </div>
                     <div class="col-md-3 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Kategori Capaian</label>
-                        <select name="kategori_capaian" class="form-select form-select-sm">
+                        <select name="kategori_capaian" id="filter-kategori-capaian" class="form-select form-select-sm">
                             <option value="">-- Semua Kategori Capaian --</option>
                             <option value="Publikasi" {{ request('kategori_capaian') == 'Publikasi' ? 'selected' : '' }}>
                                 Publikasi</option>
@@ -53,11 +53,8 @@
                         </select>
                     </div>
                     <div class="col-md-2 col-sm-12 d-flex gap-1">
-                        <button type="submit" class="btn btn-sm btn-primary flex-fill">
-                            <i class="bi bi-funnel-fill"></i> Filter
-                        </button>
-                        <a href="{{ url()->current() }}" class="btn btn-sm btn-outline-secondary" title="Reset Filter">
-                            <i class="bi bi-arrow-counterclockwise"></i>
+                        <a href="{{ url()->current() }}" id="filter-reset" class="btn btn-sm btn-outline-secondary flex-fill" title="Reset Filter">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset
                         </a>
                     </div>
                 </form>
@@ -76,7 +73,7 @@
                                 <i class="bi bi-journal-bookmark-fill fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $totalPublikasi }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-total-publikasi">{{ $totalPublikasi }}</h4>
                             </div>
                         </div>
                     </div>
@@ -93,7 +90,7 @@
                                 <i class="bi bi-calendar-check fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $publikasiTahunIni }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-publikasi-tahun-ini">{{ $publikasiTahunIni }}</h4>
                             </div>
                         </div>
                     </div>
@@ -110,7 +107,7 @@
                                 <i class="bi bi-file-earmark-pdf fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $totalDokumen }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-total-dokumen">{{ $totalDokumen }}</h4>
                             </div>
                         </div>
                     </div>
@@ -127,7 +124,7 @@
                                 <i class="bi bi-person-badge fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $dosenAktif }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-dosen-aktif">{{ $dosenAktif }}</h4>
                             </div>
                         </div>
                     </div>
@@ -144,7 +141,7 @@
                                 <i class="bi bi-person-workspace fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $mahasiswaAktif }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-mahasiswa-aktif">{{ $mahasiswaAktif }}</h4>
                             </div>
                         </div>
                     </div>
@@ -161,7 +158,7 @@
                                 <i class="bi bi-people fs-5"></i>
                             </div>
                             <div>
-                                <h4 class="mb-0 fw-bold">{{ $rataPenulis }}</h4>
+                                <h4 class="mb-0 fw-bold" id="kpi-rata-penulis">{{ $rataPenulis }}</h4>
                             </div>
                         </div>
                     </div>
@@ -277,7 +274,7 @@
                                         <th class="text-end" style="width: 20%">Publikasi</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="tbody-top-dosen">
                                     @forelse($topDosen as $idx => $d)
                                         <tr>
                                             <td>{{ $idx + 1 }}</td>
@@ -314,7 +311,7 @@
                                         <th class="text-end" style="width: 15%">Publikasi</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="tbody-top-mahasiswa">
                                     @forelse($topMahasiswa as $idx => $m)
                                         <tr>
                                             <td>{{ $idx + 1 }}</td>
@@ -353,7 +350,7 @@
                                         <th class="text-end" style="width: 25%">Total Kontribusi</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="tbody-top-pt">
                                     @forelse($topPT as $idx => $pt)
                                         <tr>
                                             <td>{{ $idx + 1 }}</td>
@@ -387,7 +384,7 @@
                                         <th class="text-end" style="width: 25%">Total Artikel</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="tbody-top-jurnal">
                                     @forelse($topJurnal as $idx => $j)
                                         <tr>
                                             <td>{{ $idx + 1 }}</td>
@@ -419,7 +416,7 @@
                             <div class="fs-1 text-warning me-3"><i class="bi bi-link-45deg"></i></div>
                             <div>
                                 <div class="small text-muted fw-bold">PUBLIKASI TANPA DOI</div>
-                                <h3 class="mb-0 fw-bold">{{ $countTanpaDoi }}</h3>
+                                <h3 class="mb-0 fw-bold" id="kpi-tanpa-doi">{{ $countTanpaDoi }}</h3>
                                 <small class="text-secondary">Memerlukan input DOI untuk sitasi ilmiah.</small>
                             </div>
                         </div>
@@ -428,7 +425,7 @@
                         <div class="p-3 border rounded bg-light h-100">
                             <div class="fw-bold mb-2 small text-secondary">Daftar Publikasi Tanpa DOI (Maksimal 10 Terbaru)
                             </div>
-                            <ul class="list-unstyled mb-0 small">
+                            <ul class="list-unstyled mb-0 small" id="list-tanpa-doi">
                                 @forelse($publikasiTanpaDoi as $ptd)
                                     <li class="mb-1 d-flex justify-content-between align-items-center">
                                         <span class="text-truncate" style="max-width: 80%"><i
@@ -497,38 +494,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            // 1. Line Chart: Tren Bulanan
-            const ctxTren = document.getElementById('trenChart').getContext('2d');
-            new Chart(ctxTren, {
-                type: 'line',
-                data: {
-                    labels: {!! json_encode($trenLabels) !!},
-                    datasets: [{
-                        label: 'Jumlah Publikasi',
-                        data: {!! json_encode($trenData) !!},
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.05)',
-                        borderWidth: 3,
-                        tension: 0.3,
-                        fill: true,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#0d6efd'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
-                    }
-                }
-            });
+
+            const charts = {};
 
             // Helper options for pie/doughnut charts
             const donutOptions = {
@@ -542,106 +509,322 @@
                 }
             };
 
-            // 2. Doughnut Chart: Kategori Capaian
-            const ctxCapaian = document.getElementById('capaianChart').getContext('2d');
-            new Chart(ctxCapaian, {
-                type: 'doughnut',
-                data: {
-                    labels: {!! json_encode($capaianLabels) !!},
-                    datasets: [{
-                        data: {!! json_encode($capaianData) !!},
-                        backgroundColor: ['#0d6efd', '#198754', '#0dcaf0', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#6c757d']
-                    }]
-                },
-                options: donutOptions
-            });
-
-            // 3. Bar Chart: Kategori Kegiatan Grouped
-            const ctxKategori = document.getElementById('kategoriChart').getContext('2d');
-            new Chart(ctxKategori, {
-                type: 'bar',
-                data: {
-                    labels: {!! json_encode(array_keys($grupKategori)) !!},
-                    datasets: [{
-                        label: 'Artikel',
-                        data: {!! json_encode(array_values($grupKategori)) !!},
-                        backgroundColor: ['#0d6efd', '#ffc107', '#fd7e14', '#198754'],
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
+            function initCharts(data) {
+                // 1. Line Chart: Tren Bulanan
+                charts.tren = new Chart(document.getElementById('trenChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: data.trenLabels,
+                        datasets: [{
+                            label: 'Jumlah Publikasi',
+                            data: data.trenData,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.05)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#0d6efd'
+                        }]
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        },
-                        x: {
-                            ticks: { font: { size: 9 } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    }
+                });
+
+                // 2. Doughnut Chart: Kategori Capaian
+                charts.capaian = new Chart(document.getElementById('capaianChart').getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.capaianLabels,
+                        datasets: [{
+                            data: data.capaianData,
+                            backgroundColor: ['#0d6efd', '#198754', '#0dcaf0', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#6c757d']
+                        }]
+                    },
+                    options: donutOptions
+                });
+
+                // 3. Bar Chart: Kategori Kegiatan Grouped
+                charts.kategori = new Chart(document.getElementById('kategoriChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(data.grupKategori),
+                        datasets: [{
+                            label: 'Artikel',
+                            data: Object.values(data.grupKategori),
+                            backgroundColor: ['#0d6efd', '#ffc107', '#fd7e14', '#198754'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { precision: 0 } },
+                            x: { ticks: { font: { size: 9 } } }
                         }
                     }
-                }
-            });
+                });
 
-            // 4. Doughnut Chart: Proporsi Penulis
-            const ctxProporsi = document.getElementById('proporsiChart').getContext('2d');
-            new Chart(ctxProporsi, {
-                type: 'doughnut',
-                data: {
-                    labels: {!! json_encode($proporsiLabels) !!},
-                    datasets: [{
-                        data: {!! json_encode($proporsiData) !!},
-                        backgroundColor: ['#ffc107', '#6f42c1', '#0dcaf0']
-                    }]
-                },
-                options: donutOptions
-            });
-
-            // 6. Bar Chart: Distribusi Publikasi Berdasarkan Jenis Publikasi
-            const ctxJenisPublikasi = document.getElementById('jenisPublikasiChart').getContext('2d');
-            new Chart(ctxJenisPublikasi, {
-                type: 'bar',
-                data: {
-                    labels: {!! json_encode($jenisPublikasiLabels) !!},
-                    datasets: [{
-                        label: 'Jumlah Publikasi',
-                        data: {!! json_encode($jenisPublikasiData) !!},
-                        backgroundColor: '#0d6efd',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
+                // 4. Doughnut Chart: Proporsi Penulis
+                charts.proporsi = new Chart(document.getElementById('proporsiChart').getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.proporsiLabels,
+                        datasets: [{
+                            data: data.proporsiData,
+                            backgroundColor: ['#ffc107', '#6f42c1', '#0dcaf0']
+                        }]
                     },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
+                    options: donutOptions
+                });
+
+                // 5. Bar Chart: Distribusi Publikasi Berdasarkan Jenis Publikasi
+                charts.jenisPublikasi = new Chart(document.getElementById('jenisPublikasiChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.jenisPublikasiLabels,
+                        datasets: [{
+                            label: 'Jumlah Publikasi',
+                            data: data.jenisPublikasiData,
+                            backgroundColor: '#0d6efd',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
                     }
-                }
+                });
+
+                // 6. Doughnut Chart: Distribusi Jenis Dokumen
+                charts.docDist = new Chart(document.getElementById('docDistChart').getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.docDistLabels,
+                        datasets: [{
+                            data: data.docDistData,
+                            backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#6c757d']
+                        }]
+                    },
+                    options: donutOptions
+                });
+            }
+
+            function updateCharts(data) {
+                charts.tren.data.labels = data.trenLabels;
+                charts.tren.data.datasets[0].data = data.trenData;
+                charts.tren.update();
+
+                charts.capaian.data.labels = data.capaianLabels;
+                charts.capaian.data.datasets[0].data = data.capaianData;
+                charts.capaian.update();
+
+                charts.kategori.data.labels = Object.keys(data.grupKategori);
+                charts.kategori.data.datasets[0].data = Object.values(data.grupKategori);
+                charts.kategori.update();
+
+                charts.proporsi.data.labels = data.proporsiLabels;
+                charts.proporsi.data.datasets[0].data = data.proporsiData;
+                charts.proporsi.update();
+
+                charts.jenisPublikasi.data.labels = data.jenisPublikasiLabels;
+                charts.jenisPublikasi.data.datasets[0].data = data.jenisPublikasiData;
+                charts.jenisPublikasi.update();
+
+                charts.docDist.data.labels = data.docDistLabels;
+                charts.docDist.data.datasets[0].data = data.docDistData;
+                charts.docDist.update();
+            }
+
+            // Initial render pakai data yang sudah dikirim controller saat load pertama (server-side render)
+            initCharts({
+                trenLabels: {!! json_encode($trenLabels) !!},
+                trenData: {!! json_encode($trenData) !!},
+                capaianLabels: {!! json_encode($capaianLabels) !!},
+                capaianData: {!! json_encode($capaianData) !!},
+                grupKategori: {!! json_encode($grupKategori) !!},
+                proporsiLabels: {!! json_encode($proporsiLabels) !!},
+                proporsiData: {!! json_encode($proporsiData) !!},
+                jenisPublikasiLabels: {!! json_encode($jenisPublikasiLabels) !!},
+                jenisPublikasiData: {!! json_encode($jenisPublikasiData) !!},
+                docDistLabels: {!! json_encode($docDistLabels) !!},
+                docDistData: {!! json_encode($docDistData) !!}
             });
 
-            // 5. Doughnut Chart: Distribusi Jenis Dokumen
-            const ctxDocDist = document.getElementById('docDistChart').getContext('2d');
-            new Chart(ctxDocDist, {
-                type: 'doughnut',
-                data: {
-                    labels: {!! json_encode($docDistLabels) !!},
-                    datasets: [{
-                        data: {!! json_encode($docDistData) !!},
-                        backgroundColor: ['#0d6efd', '#20c997', '#ffc107', '#6c757d']
-                    }]
-                },
-                options: donutOptions
+            // ================= FILTER (AJAX, tanpa perlu tekan Enter) =================
+
+            const form = document.getElementById('filterForm');
+            const inputDari = document.getElementById('filter-tanggal-dari');
+            const inputSampai = document.getElementById('filter-tanggal-sampai');
+            const selectPT = document.getElementById('filter-perguruan-tinggi');
+            const selectCapaian = document.getElementById('filter-kategori-capaian');
+            const resetLink = document.getElementById('filter-reset');
+            let debounceTimer = null;
+            let activeController = null; // untuk membatalkan request yang sudah usang
+
+            function escapeHtml(str) {
+                return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[c]);
+            }
+
+            function buildParams() {
+                const params = new URLSearchParams();
+                if (inputDari.value) params.set('tanggal_dari', inputDari.value);
+                if (inputSampai.value) params.set('tanggal_sampai', inputSampai.value);
+                if (selectPT.value) params.set('perguruan_tinggi_id', selectPT.value);
+                if (selectCapaian.value) params.set('kategori_capaian', selectCapaian.value);
+                return params;
+            }
+
+            function setLoading(isLoading) {
+                form.classList.toggle('opacity-50', isLoading);
+                document.querySelector('.dashboard').style.pointerEvents = isLoading ? 'none' : '';
+            }
+
+            function fetchDashboard() {
+                const params = buildParams();
+                const url = `${window.location.pathname}?${params.toString()}`;
+
+                // batalkan request sebelumnya kalau masih berjalan (hindari race condition antar filter)
+                if (activeController) activeController.abort();
+                activeController = new AbortController();
+
+                setLoading(true);
+
+                fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    signal: activeController.signal
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        updateDashboard(data);
+                        window.history.replaceState(null, '', url);
+                    })
+                    .catch(err => {
+                        if (err.name !== 'AbortError') console.error('Filter dashboard error:', err);
+                    })
+                    .finally(() => setLoading(false));
+            }
+
+            function updateDashboard(data) {
+                // KPI Cards
+                document.getElementById('kpi-total-publikasi').textContent = data.totalPublikasi;
+                document.getElementById('kpi-publikasi-tahun-ini').textContent = data.publikasiTahunIni;
+                document.getElementById('kpi-total-dokumen').textContent = data.totalDokumen;
+                document.getElementById('kpi-dosen-aktif').textContent = data.dosenAktif;
+                document.getElementById('kpi-mahasiswa-aktif').textContent = data.mahasiswaAktif;
+                document.getElementById('kpi-rata-penulis').textContent = data.rataPenulis;
+                document.getElementById('kpi-tanpa-doi').textContent = data.countTanpaDoi;
+
+                // Charts
+                updateCharts(data);
+
+                // Top Dosen
+                const tbodyDosen = document.getElementById('tbody-top-dosen');
+                tbodyDosen.innerHTML = data.topDosen.length ? data.topDosen.map((d, idx) => `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><code>${escapeHtml(d.nidn)}</code></td>
+                        <td>${escapeHtml(d.nama)}</td>
+                        <td class="text-end fw-bold text-primary">${d.jumlah}</td>
+                    </tr>
+                `).join('') : `<tr><td colspan="4" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+
+                // Top Mahasiswa
+                const tbodyMhs = document.getElementById('tbody-top-mahasiswa');
+                tbodyMhs.innerHTML = data.topMahasiswa.length ? data.topMahasiswa.map((m, idx) => `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><code>${escapeHtml(m.nim)}</code></td>
+                        <td>${escapeHtml(m.nama)}</td>
+                        <td>${escapeHtml(m.prodi ?? '-')}</td>
+                        <td class="text-end fw-bold text-success">${m.jumlah}</td>
+                    </tr>
+                `).join('') : `<tr><td colspan="5" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+
+                // Top PT
+                const tbodyPT = document.getElementById('tbody-top-pt');
+                tbodyPT.innerHTML = data.topPT.length ? data.topPT.map((pt, idx) => `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${escapeHtml(pt.nama_pt)}</td>
+                        <td class="text-end fw-bold text-info">${pt.jumlah}</td>
+                    </tr>
+                `).join('') : `<tr><td colspan="3" class="text-center text-muted">Belum ada data kontribusi PT.</td></tr>`;
+
+                // Top Jurnal
+                const tbodyJurnal = document.getElementById('tbody-top-jurnal');
+                tbodyJurnal.innerHTML = data.topJurnal.length ? data.topJurnal.map((j, idx) => `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${escapeHtml(j.nama_jurnal)}</td>
+                        <td class="text-end fw-bold text-danger">${j.jumlah}</td>
+                    </tr>
+                `).join('') : `<tr><td colspan="3" class="text-center text-muted">Belum ada data jurnal.</td></tr>`;
+
+                // Publikasi Tanpa DOI
+                const listDoi = document.getElementById('list-tanpa-doi');
+                listDoi.innerHTML = data.publikasiTanpaDoi.length ? data.publikasiTanpaDoi.map(ptd => `
+                    <li class="mb-1 d-flex justify-content-between align-items-center">
+                        <span class="text-truncate" style="max-width: 80%"><i class="bi bi-file-earmark-text me-1 text-secondary"></i> ${escapeHtml(ptd.judul)}</span>
+                        <a href="${ptd.edit_url}" class="btn btn-sm btn-link py-0 fw-bold text-decoration-none">Lengkapi <i class="bi bi-arrow-right"></i></a>
+                    </li>
+                `).join('') : `<li class="text-muted"><i class="bi bi-check-circle-fill text-success me-1"></i> Semua publikasi sudah terisi DOI!</li>`;
+            }
+
+            // Submit tombol "Filter" tetap berfungsi, tapi lewat AJAX (tidak reload halaman)
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                clearTimeout(debounceTimer);
+                fetchDashboard();
+            });
+
+            // Select langsung memicu filter begitu dipilih (tanpa perlu klik apapun)
+            selectPT.addEventListener('change', () => {
+                clearTimeout(debounceTimer);
+                fetchDashboard();
+            });
+            selectCapaian.addEventListener('change', () => {
+                clearTimeout(debounceTimer);
+                fetchDashboard();
+            });
+
+            // Tanggal: debounce ringan supaya tidak fetch di setiap ketikan/geser kalender,
+            // tapi tetap tanpa perlu menekan Enter atau tombol Filter
+            [inputDari, inputSampai].forEach(input => {
+                input.addEventListener('input', () => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(fetchDashboard, 400);
+                });
+                // Perubahan lewat date picker (klik tanggal) langsung memicu filter
+                input.addEventListener('change', () => {
+                    clearTimeout(debounceTimer);
+                    fetchDashboard();
+                });
+            });
+
+            // Reset filter tanpa reload halaman
+            resetLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                inputDari.value = '';
+                inputSampai.value = '';
+                selectPT.value = '';
+                selectCapaian.value = '';
+                clearTimeout(debounceTimer);
+                fetchDashboard();
             });
         });
     </script>

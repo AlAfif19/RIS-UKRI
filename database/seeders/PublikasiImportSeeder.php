@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Dosen;
+use App\Models\MasterPerguruanTinggi;
 use App\Models\Publikasi;
 use App\Models\PublikasiPenulisDosen;
 use App\Models\PublikasiPenulisLain;
@@ -12,12 +13,19 @@ class PublikasiImportSeeder extends Seeder
 {
     /**
      * Import data publikasi dari Data_Penelitian.xlsx (sheet Jurnal & Book).
-     * Semua penulis selain 4 dosen yang sudah terdaftar di PublikasiMasterSeeder
-     * (SUBHANJAYA ANGGA ATMAJA, CANDRA AENI, ENCEP SOPANDI, DEWI MAHARANI)
+     *
+     * Penulis yang namanya cocok persis dengan dosen di Master Data API UKRI
+     * (SUBHANJAYA ANGGA ATMAJA, IIM ABDURROHIM, IRMAN HARIMAN,
+     * OSCAR HADIKARYANA, DENI SUPRIHADI, YASRI, ALKAUTSAR RAHMAN,
+     * ERWIN TEGUH ARUJISAPUTRA - lihat seedDosenFromMasterData()) dimasukkan
+     * sebagai PublikasiPenulisDosen dengan NIDN sesuai master. Sisanya
+     * (belum ada di master, mis. mahasiswa/co-author eksternal) tetap
      * dimasukkan sebagai Kolaborator Eksternal (publikasi_penulis_lain).
      */
     public function run(): void
     {
+        $this->seedDosenFromMasterData();
+
         // ==================== SHEET: Jurnal ====================
         $pub1 = Publikasi::firstOrCreate(['judul' => 'Blockchain Integration in Cybersecurity: A Novel Approach to Enhancing Data Privacy and Integrity in Digital Transactions'], [
             'kategori_kegiatan' => 'Hasil penelitian/pemikiran yang dipublikasikan dalam bentuk jurnal internasional terindeks pada basis data internasional',
@@ -64,9 +72,9 @@ class PublikasiImportSeeder extends Seeder
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub1->id,
-            'nama' => 'ERWIN TEGUH ARUJISAPUTRA',
+            'dosen_id' => Dosen::where('nidn', '0421057401')->first()->id,
         ], [
             'urutan' => 5,
             'peran' => 'Penulis',
@@ -140,9 +148,9 @@ class PublikasiImportSeeder extends Seeder
             'keterangan' => 'Diimpor dari Data_Penelitian.xlsx (Jurnal)',
         ]);
 
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub3->id,
-            'nama' => 'IIM ABDURROHIM',
+            'dosen_id' => Dosen::where('nidn', '0413107002')->first()->id,
         ], [
             'urutan' => 1,
             'peran' => 'Penulis',
@@ -202,9 +210,9 @@ class PublikasiImportSeeder extends Seeder
             'peran' => 'Penulis',
             'is_corresponding' => true,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub4->id,
-            'nama' => 'YASRI',
+            'dosen_id' => Dosen::where('nidn', '0303116708')->first()->id,
         ], [
             'urutan' => 2,
             'peran' => 'Penulis',
@@ -292,25 +300,25 @@ class PublikasiImportSeeder extends Seeder
             'keterangan' => 'Diimpor dari Data_Penelitian.xlsx (Jurnal)',
         ]);
 
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'IIM ABDURROHIM',
+            'dosen_id' => Dosen::where('nidn', '0413107002')->first()->id,
         ], [
             'urutan' => 1,
             'peran' => 'Penulis',
             'is_corresponding' => true,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'ALKAUTSAR RAHMAN',
+            'dosen_id' => Dosen::where('nidn', '0407048401')->first()->id,
         ], [
             'urutan' => 2,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'YASRI',
+            'dosen_id' => Dosen::where('nidn', '0303116708')->first()->id,
         ], [
             'urutan' => 3,
             'peran' => 'Penulis',
@@ -324,25 +332,25 @@ class PublikasiImportSeeder extends Seeder
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'IRMAN HARIMAN',
+            'dosen_id' => Dosen::where('nidn', '0413097602')->first()->id,
         ], [
             'urutan' => 5,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'OSCAR HADIKARYANA',
+            'dosen_id' => Dosen::where('nidn', '0418036802')->first()->id,
         ], [
             'urutan' => 6,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub7->id,
-            'nama' => 'DENI SUPRIHADI',
+            'dosen_id' => Dosen::where('nidn', '0411117602')->first()->id,
         ], [
             'urutan' => 7,
             'peran' => 'Penulis',
@@ -502,9 +510,9 @@ class PublikasiImportSeeder extends Seeder
             'peran' => 'Penulis',
             'is_corresponding' => true,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub10->id,
-            'nama' => 'OSCAR HADIKARYANA',
+            'dosen_id' => Dosen::where('nidn', '0418036802')->first()->id,
         ], [
             'urutan' => 2,
             'peran' => 'Penulis',
@@ -1402,49 +1410,49 @@ class PublikasiImportSeeder extends Seeder
             'keterangan' => 'Diimpor dari Data_Penelitian.xlsx (Jurnal)',
         ]);
 
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'OSCAR HADIKARYANA',
+            'dosen_id' => Dosen::where('nidn', '0418036802')->first()->id,
         ], [
             'urutan' => 1,
             'peran' => 'Penulis',
             'is_corresponding' => true,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'IRMAN HARIMAN',
+            'dosen_id' => Dosen::where('nidn', '0413097602')->first()->id,
         ], [
             'urutan' => 2,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'YASRI',
+            'dosen_id' => Dosen::where('nidn', '0303116708')->first()->id,
         ], [
             'urutan' => 3,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'ALKAUTSAR RAHMAN',
+            'dosen_id' => Dosen::where('nidn', '0407048401')->first()->id,
         ], [
             'urutan' => 4,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'IIM ABDURROHIM',
+            'dosen_id' => Dosen::where('nidn', '0413107002')->first()->id,
         ], [
             'urutan' => 5,
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub24->id,
-            'nama' => 'DENI SUPRIHADI',
+            'dosen_id' => Dosen::where('nidn', '0411117602')->first()->id,
         ], [
             'urutan' => 6,
             'peran' => 'Penulis',
@@ -1675,9 +1683,9 @@ class PublikasiImportSeeder extends Seeder
             'peran' => 'Penulis',
             'is_corresponding' => false,
         ]);
-        PublikasiPenulisLain::firstOrCreate([
+        PublikasiPenulisDosen::firstOrCreate([
             'publikasi_id' => $pub28->id,
-            'nama' => 'OSCAR HADIKARYANA',
+            'dosen_id' => Dosen::where('nidn', '0418036802')->first()->id,
         ], [
             'urutan' => 7,
             'peran' => 'Penulis',
@@ -1716,5 +1724,41 @@ class PublikasiImportSeeder extends Seeder
             'is_corresponding' => false,
         ]);
 
+    }
+
+    /**
+     * Lengkapi data Dosen (dengan NIDN sesuai Master Data API UKRI - dosen:read)
+     * untuk dosen yang namanya cocok persis dengan penulis yang sebelumnya
+     * salah masuk sebagai Kolaborator Eksternal (publikasi_penulis_lain) di
+     * import Data_Penelitian.xlsx. Dijalankan sebelum seluruh publikasi
+     * diimpor supaya lookup `Dosen::where('nama', ...)` di bawah berhasil.
+     */
+    private function seedDosenFromMasterData(): void
+    {
+        $ptUkri = MasterPerguruanTinggi::firstOrCreate(
+            ['kode_pt' => '041065'],
+            ['nama_pt' => 'Universitas Kebangsaan Republik Indonesia']
+        );
+
+        // NIDN persis dari Master Data API UKRI (dosen:read). Kalau dosen
+        // dengan NIDN ini SUDAH ADA (mis. hasil `ukri:sync` sebelumnya),
+        // firstOrCreate tidak akan menimpa nama aslinya - 'nama' di bawah
+        // hanya dipakai kalau baris dosen ini belum ada sama sekali.
+        $dosenMasterTambahan = [
+            ['nidn' => '0413107002', 'nama' => 'IIM ABDURROHIM'],
+            ['nidn' => '0413097602', 'nama' => 'IRMAN HARIMAN'],
+            ['nidn' => '0418036802', 'nama' => 'OSCAR HADIKARYANA'],
+            ['nidn' => '0411117602', 'nama' => 'DENI SUPRIHADI'],
+            ['nidn' => '0303116708', 'nama' => 'YASRI'],
+            ['nidn' => '0407048401', 'nama' => 'ALKAUTSAR RAHMAN'],
+            ['nidn' => '0421057401', 'nama' => 'ERWIN TEGUH ARUJISAPUTRA'],
+        ];
+
+        foreach ($dosenMasterTambahan as $d) {
+            Dosen::firstOrCreate(['nidn' => $d['nidn']], [
+                'master_perguruan_tinggi_id' => $ptUkri->id,
+                'nama' => $d['nama'],
+            ]);
+        }
     }
 }

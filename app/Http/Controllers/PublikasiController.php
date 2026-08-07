@@ -57,9 +57,8 @@ class PublikasiController extends Controller
     public function create()
     {
         $aktivitasLitabmas = MasterAktivitasLitabmas::all();
-        $mahasiswaList = Mahasiswa::all();
 
-        return view('publikasi.create', compact('aktivitasLitabmas', 'mahasiswaList'));
+        return view('publikasi.create', compact('aktivitasLitabmas'));
     }
 
     public function store(Request $request)
@@ -195,7 +194,7 @@ class PublikasiController extends Controller
                     $key = "dosen_{$idx}";
                     PublikasiPenulisDosen::create([
                         'publikasi_id' => $publikasi->id,
-                        'master_perguruan_tinggi_id' => $ptId,
+                        'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
                         'dosen_id' => $dosen->id,
                         'urutan' => $dosenInput['urutan'] ?? ($idx + 1),
                         'afiliasi' => $dosenInput['afiliasi'] ?? null,
@@ -254,14 +253,20 @@ class PublikasiController extends Controller
         return view('publikasi.show', compact('publikasi'));
     }
 
-    public function edit(Publikasi $publikasi)
+    public function edit(Request $request, Publikasi $publikasi)
     {
         $this->checkAccess($publikasi);
         $publikasi->load(['aktivitasLitabmas', 'penulisDosen.dosen', 'penulisMahasiswa.mahasiswa', 'penulisLain', 'dokumen']);
         $aktivitasLitabmas = MasterAktivitasLitabmas::all();
-        $mahasiswaList = Mahasiswa::all();
 
-        return view('publikasi.edit', compact('publikasi', 'aktivitasLitabmas', 'mahasiswaList'));
+        // Halaman & kata pencarian tempat user datang dari daftar Publikasi
+        // Karya - dibawa lewat query string dari link Edit di table.blade.php,
+        // lalu disimpan sebagai hidden input di form edit supaya submit
+        // update() bisa redirect balik ke halaman yang sama (bukan ke page 1).
+        $returnPage = $request->query('page', '1');
+        $returnSearch = $request->query('search', '');
+
+        return view('publikasi.edit', compact('publikasi', 'aktivitasLitabmas', 'returnPage', 'returnSearch'));
     }
 
     public function update(Request $request, Publikasi $publikasi)
@@ -381,7 +386,7 @@ class PublikasiController extends Controller
                     $key = "dosen_{$idx}";
                     PublikasiPenulisDosen::create([
                         'publikasi_id' => $publikasi->id,
-                        'master_perguruan_tinggi_id' => $ptId,
+                        'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
                         'dosen_id' => $dosen->id,
                         'urutan' => $dosenInput['urutan'] ?? ($idx + 1),
                         'afiliasi' => $dosenInput['afiliasi'] ?? null,
@@ -427,7 +432,13 @@ class PublikasiController extends Controller
 
             DB::commit();
 
-            return redirect()->route('publikasi.index')->with('success', 'Data Publikasi Karya berhasil diperbarui.');
+            // Redirect balik ke halaman & kata pencarian tempat user datang
+            // (dibawa lewat hidden input return_page/return_search di form
+            // edit.blade.php), bukan selalu ke page 1.
+            return redirect()->route('publikasi.index', array_filter([
+                'page' => $request->input('return_page', '1'),
+                'search' => $request->input('return_search', ''),
+            ]))->with('success', 'Data Publikasi Karya berhasil diperbarui.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -452,31 +463,67 @@ class PublikasiController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * Cari dosen dari mirror lokal Master Data API UKRI (dosen:read), plus
+     * dosen eksternal yang diinput manual. Filter fakultas_id/prodi_id
+     * mengikuti parameter yang sama seperti endpoint /api/v1/dosen di API.
+     */
     public function apiSearchDosen(Request $request)
     {
-        $query = Dosen::with('perguruanTinggi');
+        $query = Dosen::with(['perguruanTinggi', 'fakultas', 'prodi'])->search($request->q);
+
         if ($request->filled('pt_id')) {
             $query->where('master_perguruan_tinggi_id', $request->pt_id);
         }
-        if ($request->filled('q')) {
-            $q = $request->q;
-            $query->where(function($b) use ($q) {
-                $b->where('nama', 'like', "%{$q}%")->orWhere('nidn', 'like', "%{$q}%");
-            });
+        if ($request->filled('fakultas_id')) {
+            $query->where('fakultas_id', $request->fakultas_id);
         }
+        if ($request->filled('prodi_id')) {
+            $query->where('prodi_id', $request->prodi_id);
+        }
+
         return response()->json($query->take(20)->get());
     }
 
+    /**
+     * Cari mahasiswa dari mirror lokal Master Data API UKRI (mahasiswa:read).
+     * Filter prodi_id/angkatan_id mengikuti parameter yang sama seperti
+     * endpoint /api/v1/mahasiswa di API.
+     */
     public function apiSearchMahasiswa(Request $request)
     {
-        $query = Mahasiswa::query();
-        if ($request->filled('q')) {
-            $q = $request->q;
-            $query->where(function($b) use ($q) {
-                $b->where('nama', 'like', "%{$q}%")->orWhere('nim', 'like', "%{$q}%");
-            });
+        // Sengaja TIDAK eager-load relasi prodi()/angkatan(): tabel mahasiswa
+        // juga punya kolom string biasa bernama `prodi`, dan relasi dengan
+        // nama sama akan menimpa nilai kolom itu saat di-serialize ke JSON
+        // (jadi objek, bukan lagi teks) - makanya kemarin muncul "[object
+        // Object]" di dropdown. Cukup ambil kolom yang benar-benar dipakai.
+        $query = Mahasiswa::search($request->q);
+
+        if ($request->filled('prodi_id')) {
+            $query->where('prodi_id', $request->prodi_id);
         }
-        return response()->json($query->take(20)->get());
+        if ($request->filled('angkatan_id')) {
+            $query->where('angkatan_id', $request->angkatan_id);
+        }
+
+        return response()->json(
+            $query->orderBy('nama')->take(20)->get(['id', 'nim', 'nama', 'prodi'])
+        );
+    }
+
+    /**
+     * Semua mahasiswa (mirror lokal Master Data API UKRI), untuk dropdown
+     * pencarian di form Publikasi Karya (create.blade.php / edit.blade.php).
+     * Beda dengan apiSearchMahasiswa(): endpoint ini memuat SELURUH data
+     * sekali saat form dibuka, lalu pencocokan NIM/nama dilakukan di
+     * browser (Tom Select) - jadi hasil langsung mengecil sesuai ketikan
+     * tanpa request berulang ke server tiap huruf diketik.
+     */
+    public function apiAllMahasiswa()
+    {
+        return response()->json(
+            Mahasiswa::orderBy('nama')->get(['id', 'nim', 'nama', 'prodi'])
+        );
     }
 
     private function checkAccess(Publikasi $publikasi)

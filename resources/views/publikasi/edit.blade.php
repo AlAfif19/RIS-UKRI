@@ -1,5 +1,23 @@
 @extends('layouts.app')
 
+@push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        /* Dropdown pencarian mahasiswa: defaultnya cuma ~200px (kelihatan
+           sebagian) - dibesarkan supaya lebih mudah dibaca & diklik. */
+        .ts-dropdown .ts-dropdown-content {
+            max-height: 320px;
+        }
+        .ts-dropdown .option {
+            padding: 10px 14px;
+            font-size: 0.95rem;
+        }
+        .ts-dropdown {
+            z-index: 9999;
+        }
+    </style>
+@endpush
+
 @section('content')
 
 <div class="pagetitle">
@@ -33,6 +51,12 @@
             <form action="{{ route('publikasi.update', $publikasi->id) }}" method="POST" enctype="multipart/form-data" id="formPublikasiEdit">
                 @csrf
                 @method('PUT')
+
+                {{-- Halaman & kata pencarian asal (dari daftar Publikasi Karya) -
+                     dibawa balik ke update() supaya setelah simpan, user kembali
+                     ke halaman yang sama, bukan selalu ke page 1. --}}
+                <input type="hidden" name="return_page" value="{{ $returnPage }}">
+                <input type="hidden" name="return_search" value="{{ $returnSearch }}">
 
                 <!-- CARD 1: Kategori & Detail Publikasi -->
                 <div class="card mb-4">
@@ -396,11 +420,12 @@
                                     @foreach($publikasi->penulisMahasiswa as $idx => $pm)
                                         <tr class="row-penulis-mahasiswa">
                                             <td>
-                                                <select name="penulis_mahasiswa[{{ $idx }}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell" required>
-                                                    <option value="">Pilih Mahasiswa...</option>
-                                                    @foreach($mahasiswaList as $mhs)
-                                                        <option value="{{ $mhs->id }}" {{ $pm->mahasiswa_id == $mhs->id ? 'selected' : '' }}>{{ $mhs->nim }} - {{ $mhs->nama }}</option>
-                                                    @endforeach
+                                                <select name="penulis_mahasiswa[{{ $idx }}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell mahasiswa-select" required>
+                                                    @if($pm->mahasiswa)
+                                                        <option value="{{ $pm->mahasiswa->id }}" selected>{{ $pm->mahasiswa->nim }} - {{ $pm->mahasiswa->nama }}</option>
+                                                    @else
+                                                        <option value="">-- Pilih Mahasiswa --</option>
+                                                    @endif
                                                 </select>
                                             </td>
                                             <td>
@@ -505,7 +530,7 @@
                 <!-- SUBMIT BUTTON -->
                 <div class="card mb-4">
                     <div class="card-body py-3 d-flex justify-content-between align-items-center">
-                        <a href="{{ route('publikasi.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('publikasi.index', array_filter(['page' => $returnPage, 'search' => $returnSearch])) }}" class="btn btn-secondary">
                             <i class="bi bi-arrow-left"></i> Batal
                         </a>
                         <button type="submit" class="btn btn-primary px-4 py-2 fw-bold">
@@ -523,13 +548,65 @@
 @endsection
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
     let dokCount = 0;
     let dosenCount = {{ $publikasi->penulisDosen->count() }};
     let mhsCount = {{ $publikasi->penulisMahasiswa->count() }};
     let lainCount = {{ $publikasi->penulisLain->count() }};
 
-    const masterMahasiswaOptions = `@foreach($mahasiswaList as $mhs)<option value="{{ $mhs->id }}">{{ $mhs->nim }} - {{ $mhs->nama }} ({{ $mhs->prodi }})</option>@endforeach`;
+    // Semua mahasiswa dimuat SEKALI ke memori browser (bukan per-baris,
+    // bukan per-huruf yang diketik), lalu pencariannya dilakukan lokal oleh
+    // Tom Select - jadi instan, tidak ada request ke server tiap mengetik.
+    let mahasiswaOptionsPromise = null;
+
+    function loadAllMahasiswaOptions() {
+        if (!mahasiswaOptionsPromise) {
+            mahasiswaOptionsPromise = fetch(`{{ route('api.mahasiswa.all') }}`)
+                .then((r) => r.json())
+                .then((data) => data.map((m) => ({
+                    value: String(m.id),
+                    text: m.nim + ' - ' + m.nama + (m.prodi ? ' (' + m.prodi + ')' : ''),
+                })))
+                .catch(() => []);
+        }
+        return mahasiswaOptionsPromise;
+    }
+
+    // Baris yang sudah ada (hasil render server) hanya membawa satu
+    // <option> terpilih - Tom Select otomatis mempertahankannya sebagai
+    // item awal begitu daftar lengkapnya selesai dimuat di belakang layar.
+    function initMahasiswaSelect(selectEl) {
+        if (!selectEl || selectEl.tomselect) return;
+        const ts = new TomSelect(selectEl, {
+            valueField: 'value',
+            labelField: 'text',
+            searchField: ['text'],
+            create: false,
+            maxItems: 1,
+            // Semua data mahasiswa memang dimuat, tapi jumlah yang dirender
+            // ke DOM tetap dibatasi supaya tidak lag kalau datanya ribuan
+            // baris - begitu diketik, pencarian tetap menjangkau SELURUH
+            // data (bukan cuma yang kebatas ini), hasilnya makin sedikit &
+            // makin relevan sesuai ketikan.
+            maxOptions: 100,
+            dropdownParent: 'body',
+            render: {
+                no_results: function (data, escape) {
+                    return `<div class="no-results">Mahasiswa "${escape(data.input)}" tidak ditemukan</div>`;
+                },
+            },
+        });
+
+        loadAllMahasiswaOptions().then((options) => {
+            ts.addOptions(options);
+            ts.refreshOptions(false);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('#containerPenulisMahasiswa .mahasiswa-select').forEach(initMahasiswaSelect);
+    });
 
     // Escape HTML string
     function escapeHtml(text) {
@@ -737,9 +814,8 @@
         const nextIdx = mhsCount++;
         row.innerHTML = `
             <td>
-                <select name="penulis_mahasiswa[${nextIdx}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell" required>
-                    <option value="">Pilih Mahasiswa...</option>
-                    ${masterMahasiswaOptions}
+                <select name="penulis_mahasiswa[${nextIdx}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell mahasiswa-select" required>
+                    <option value="">-- Pilih Mahasiswa --</option>
                 </select>
             </td>
             <td>
@@ -768,6 +844,7 @@
             </td>
         `;
         container.appendChild(row);
+        initMahasiswaSelect(row.querySelector('.mahasiswa-select'));
     }
 
     // 5. Penulis Lain Rows

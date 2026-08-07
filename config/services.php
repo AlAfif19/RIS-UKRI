@@ -35,4 +35,23 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Master Data API UKRI
+    |--------------------------------------------------------------------------
+    |
+    | Kredensial untuk https://api.ukri.web.id/api/v1 - API read-only yang
+    | menyediakan data fakultas, prodi, angkatan, peminatan, dosen, dan
+    | mahasiswa. Lihat App\Services\UkriMasterDataService.
+    |
+    */
+
+    'ukri' => [
+        'base_url' => env('UKRI_API_BASE_URL', 'https://api.ukri.web.id/api/v1'),
+        'token' => env('UKRI_API_TOKEN'),
+        // Berapa lama (menit) respons fakultas/prodi disimpan di cache aplikasi,
+        // di luar mirror tabel lokal yang dibuat oleh perintah ukri:sync.
+        'cache_ttl' => env('UKRI_API_CACHE_TTL', 1440),
+    ],
+
 ];

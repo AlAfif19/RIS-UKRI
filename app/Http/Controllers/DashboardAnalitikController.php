@@ -9,6 +9,40 @@ use App\Models\MasterAktivitasLitabmas;
 
 class DashboardAnalitikController extends Controller
 {
+    /**
+     * kode_pt dummy bawaan PublikasiMasterSeeder (lihat juga
+     * ReconcileAuthorsWithMasterData::DEMO_DOSEN_NIDN) - sengaja disembunyikan
+     * dari dropdown filter dashboard, meskipun rownya belum dihapus dari DB.
+     */
+    private const DEMO_PT_KODE = [
+        '071020', // Universitas PGRI Ronggolawe
+        '041012', // Universitas Nurtanio Bandung
+        '111005', // Universitas Muhammadiyah Banjarmasin
+    ];
+
+    /**
+     * NIDN dosen dummy bawaan PublikasiMasterSeeder - harus sinkron dengan
+     * ReconcileAuthorsWithMasterData::DEMO_DOSEN_NIDN. Disembunyikan dari
+     * ranking dashboard meskipun rownya belum dihapus lewat
+     * "php artisan ukri:reconcile-authors --delete-demo --apply".
+     */
+    private const DEMO_DOSEN_NIDN = [
+        '0454768669130262', // SUBHANJAYA ANGGA ATMAJA
+        '6955745646230092', // CANDRA AENI
+        '6338746647130093', // ENCEP SOPANDI
+        '8736763665300082', // DEWI MAHARANI
+    ];
+
+    /**
+     * NIM mahasiswa dummy bawaan PublikasiMasterSeeder - harus sinkron dengan
+     * ReconcileAuthorsWithMasterData::DEMO_MAHASISWA_NIM.
+     */
+    private const DEMO_MAHASISWA_NIM = [
+        '20221310001', // Ahmad Rizky Pratama
+        '20221310002', // Siti Nurhaliza
+        '20221310003', // Budi Santoso
+    ];
+
     private function getFilteredPublikasiQuery(Request $request)
     {
         $query = DB::table('publikasi');
@@ -28,10 +62,14 @@ class DashboardAnalitikController extends Controller
         if ($request->filled('perguruan_tinggi_id')) {
             $ptId = $request->perguruan_tinggi_id;
             $query->whereExists(function ($q) use ($ptId) {
+                // master_perguruan_tinggi_id di publikasi_penulis_dosen kadang kosong
+                // (kalau saat input publikasi form afiliasi tidak diisi ulang),
+                // jadi selalu fallback ke PT milik dosen-nya sendiri.
                 $q->select(DB::raw(1))
-                    ->from('publikasi_penulis_dosen')
-                    ->whereColumn('publikasi_penulis_dosen.publikasi_id', 'publikasi.id')
-                    ->where('publikasi_penulis_dosen.master_perguruan_tinggi_id', $ptId);
+                    ->from('publikasi_penulis_dosen as ppd')
+                    ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+                    ->whereColumn('ppd.publikasi_id', 'publikasi.id')
+                    ->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) = ?', [$ptId]);
             });
         }
 
@@ -39,6 +77,31 @@ class DashboardAnalitikController extends Controller
     }
 
     public function index(Request $request)
+    {
+        $data = $this->buildDashboardData($request);
+
+        // AJAX / fetch request → kembalikan JSON saja (tanpa render ulang layout)
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json($data);
+        }
+
+        $usedPtIds = DB::table('publikasi_penulis_dosen as ppd')
+            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+            ->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) IS NOT NULL')
+            ->select(DB::raw('DISTINCT COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) as pt_id'));
+
+        // Dropdown filter hanya menampilkan PT yang benar-benar punya kontribusi
+        // publikasi (bukan sekadar ada di master data), sekaligus tetap
+        // menyembunyikan PT dummy bawaan seeder kalau baris-nya belum dihapus.
+        $data['perguruanTinggiList'] = MasterPerguruanTinggi::whereNotIn('kode_pt', self::DEMO_PT_KODE)
+            ->whereIn('id', $usedPtIds)
+            ->orderBy('nama_pt')
+            ->get();
+
+        return view('dashboard-analitik.index', $data);
+    }
+
+    private function buildDashboardData(Request $request): array
     {
         // Base query for subquery joins
         $filteredIdsQuery = $this->getFilteredPublikasiQuery($request)->select('id');
@@ -167,9 +230,14 @@ class DashboardAnalitikController extends Controller
         $jenisPublikasiData = $jenisPublikasiRaw->pluck('jumlah')->toArray();
 
         // 7. Rankings (Top 10)
+        // Dosen dummy bawaan seeder (ReconcileAuthorsWithMasterData::DEMO_DOSEN_NIDN)
+        // juga dikecualikan di sini - kalau baris dummy-nya belum benar-benar
+        // dihapus dari DB (lihat "php artisan ukri:reconcile-authors --delete-demo"),
+        // publikasi contoh yang menempel padanya jangan sampai muncul di ranking.
         $topDosen = DB::table('publikasi_penulis_dosen')
             ->join('dosen', 'publikasi_penulis_dosen.dosen_id', '=', 'dosen.id')
             ->whereIn('publikasi_penulis_dosen.publikasi_id', $filteredIdsQuery)
+            ->whereNotIn('dosen.nidn', self::DEMO_DOSEN_NIDN)
             ->select('dosen.nama', 'dosen.nidn', DB::raw('count(*) as jumlah'))
             ->groupBy('dosen.id', 'dosen.nama', 'dosen.nidn')
             ->orderBy('jumlah', 'desc')
@@ -179,20 +247,44 @@ class DashboardAnalitikController extends Controller
         $topMahasiswa = DB::table('publikasi_penulis_mahasiswa')
             ->join('mahasiswa', 'publikasi_penulis_mahasiswa.mahasiswa_id', '=', 'mahasiswa.id')
             ->whereIn('publikasi_penulis_mahasiswa.publikasi_id', $filteredIdsQuery)
+            ->whereNotIn('mahasiswa.nim', self::DEMO_MAHASISWA_NIM)
             ->select('mahasiswa.nama', 'mahasiswa.nim', 'mahasiswa.prodi', DB::raw('count(*) as jumlah'))
             ->groupBy('mahasiswa.id', 'mahasiswa.nama', 'mahasiswa.nim', 'mahasiswa.prodi')
             ->orderBy('jumlah', 'desc')
             ->limit(10)
             ->get();
 
-        $topPT = DB::table('publikasi_penulis_dosen')
-            ->join('master_perguruan_tinggi', 'publikasi_penulis_dosen.master_perguruan_tinggi_id', '=', 'master_perguruan_tinggi.id')
-            ->whereIn('publikasi_penulis_dosen.publikasi_id', $filteredIdsQuery)
-            ->select('master_perguruan_tinggi.nama_pt', DB::raw('count(*) as jumlah'))
-            ->groupBy('master_perguruan_tinggi.id', 'master_perguruan_tinggi.nama_pt')
-            ->orderBy('jumlah', 'desc')
+        // master_perguruan_tinggi_id di publikasi_penulis_dosen kadang kosong,
+        // jadi fallback ke PT milik dosen-nya sendiri (COALESCE) supaya kontribusi
+        // PT tidak under-count.
+        // PT dummy bawaan seeder (DEMO_PT_KODE) juga dikecualikan di sini -
+        // sebelumnya cuma disembunyikan dari dropdown filter, tapi masih ikut
+        // masuk ranking "Kontribusi per Perguruan Tinggi" sehingga datanya
+        // tercampur dengan PT dummy yang sebenarnya sudah tidak dipakai.
+        $excludedPtIds = MasterPerguruanTinggi::whereIn('kode_pt', self::DEMO_PT_KODE)->pluck('id')->toArray();
+
+        $topPTRaw = DB::table('publikasi_penulis_dosen as ppd')
+            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+            ->whereIn('ppd.publikasi_id', $filteredIdsQuery)
+            ->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) IS NOT NULL')
+            ->whereNotIn(DB::raw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id)'), $excludedPtIds)
+            ->select(
+                DB::raw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) as pt_id'),
+                DB::raw('COUNT(*) as jumlah')
+            )
+            ->groupBy(DB::raw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id)'))
+            ->orderByDesc('jumlah')
             ->limit(10)
             ->get();
+
+        $ptNames = MasterPerguruanTinggi::whereIn('id', $topPTRaw->pluck('pt_id'))->pluck('nama_pt', 'id');
+
+        $topPT = $topPTRaw->map(function ($row) use ($ptNames) {
+            return (object) [
+                'nama_pt' => $ptNames[$row->pt_id] ?? 'Tidak diketahui',
+                'jumlah' => $row->jumlah,
+            ];
+        });
 
         $topJurnal = $this->getFilteredPublikasiQuery($request)
             ->select('nama_jurnal', DB::raw('count(*) as jumlah'))
@@ -209,12 +301,13 @@ class DashboardAnalitikController extends Controller
                 $q->whereNull('doi')->orWhere('doi', '');
             });
         $countTanpaDoi = $tanpaDoiQuery->count();
-        $publikasiTanpaDoi = $tanpaDoiQuery->select('id', 'judul')->limit(10)->get();
+        $publikasiTanpaDoi = $tanpaDoiQuery->select('id', 'judul')->limit(10)->get()
+            ->map(function ($item) {
+                $item->edit_url = route('publikasi.edit', $item->id);
+                return $item;
+            });
 
-        // Filter lists
-        $perguruanTinggiList = MasterPerguruanTinggi::all();
-
-        return view('dashboard-analitik.index', compact(
+        return compact(
             'totalPublikasi',
             'publikasiTahunIni',
             'totalDokumen',
@@ -237,8 +330,7 @@ class DashboardAnalitikController extends Controller
             'topPT',
             'topJurnal',
             'countTanpaDoi',
-            'publikasiTanpaDoi',
-            'perguruanTinggiList'
-        ));
+            'publikasiTanpaDoi'
+        );
     }
 }

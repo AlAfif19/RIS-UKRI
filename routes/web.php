@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 use App\Http\Controllers\PublikasiController;
 use App\Http\Controllers\DashboardAnalitikController;
+use App\Http\Controllers\MasterDataController;
 
 /*
 |--------------------------------------------------------------------------
@@ -93,3 +94,14 @@ Route::resource('publikasi', PublikasiController::class);
 Route::delete('/publikasi-dokumen/{dokumen}', [PublikasiController::class, 'destroyDokumen'])->name('publikasi.dokumen.destroy');
 Route::get('/api/dosen/search', [PublikasiController::class, 'apiSearchDosen'])->name('api.dosen.search');
 Route::get('/api/mahasiswa/search', [PublikasiController::class, 'apiSearchMahasiswa'])->name('api.mahasiswa.search');
+Route::get('/api/mahasiswa/all', [PublikasiController::class, 'apiAllMahasiswa'])->name('api.mahasiswa.all');
+
+/*
+|--------------------------------------------------------------------------
+| Master Data UKRI (mirror lokal dari api.ukri.web.id)
+|--------------------------------------------------------------------------
+*/
+Route::get('/api/master/fakultas', [MasterDataController::class, 'fakultas'])->name('api.master.fakultas');
+Route::get('/api/master/prodi', [MasterDataController::class, 'prodi'])->name('api.master.prodi');
+Route::get('/api/master/angkatan', [MasterDataController::class, 'angkatan'])->name('api.master.angkatan');
+Route::get('/api/master/peminatan', [MasterDataController::class, 'peminatan'])->name('api.master.peminatan');

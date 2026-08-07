@@ -1,5 +1,31 @@
 @extends('layouts.app')
 
+@push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        /* Dropdown pencarian mahasiswa: defaultnya cuma ~200px (kelihatan
+           sebagian) - dibesarkan supaya lebih mudah dibaca & diklik.
+           Selector tidak di-scope ke .mahasiswa-select karena Tom Select
+           merender dropdown-nya di dalam .ts-wrapper, bukan sebagai
+           sibling langsung dari elemen <select> aslinya. */
+        .ts-dropdown .ts-dropdown-content {
+            max-height: 320px;
+        }
+        .ts-dropdown .option {
+            padding: 10px 14px;
+            font-size: 0.95rem;
+        }
+        /* Dropdown-nya di-pindah ke <body> (lihat dropdownParent di JS) supaya
+           tidak kepotong oleh overflow tabel / ketutup baris di bawahnya -
+           makanya perlu z-index tinggi di sini. Aman dibikin paling atas
+           karena dropdown ini cuma muncul sesaat lalu otomatis hilang begitu
+           satu mahasiswa dipilih. */
+        .ts-dropdown {
+            z-index: 9999;
+        }
+    </style>
+@endpush
+
 @section('content')
 
     <div class="pagetitle">
@@ -503,7 +529,7 @@
                                 <table class="table table-bordered align-middle">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 35%">Nama Mahasiswa (Pilih dari DB Mahasiswa)</th>
+                                            <th style="width: 35%">Nama Mahasiswa</th>
                                             <th style="width: 10%">Urutan</th>
                                             <th style="width: 15%">Afiliasi</th>
                                             <th style="width: 15%">Peran</th>
@@ -577,13 +603,63 @@
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script>
         let dokCount = 0;
         let dosenCount = 1;
         let mhsCount = 0;
         let lainCount = 0;
 
-        const masterMahasiswaOptions = `@foreach($mahasiswaList as $mhs)<option value="{{ $mhs->id }}">{{ $mhs->nim }} - {{ $mhs->nama }} ({{ $mhs->prodi }})</option>@endforeach`;
+        // Semua mahasiswa dimuat SEKALI ke memori browser (bukan per-baris,
+        // bukan per-huruf yang diketik), lalu pencariannya dilakukan lokal
+        // oleh Tom Select - jadi instan, tidak ada request ke server tiap
+        // mengetik. Daftarnya di-cache di variabel ini supaya walau ada
+        // banyak baris penulis mahasiswa, cuma 1x fetch ke server.
+        let mahasiswaOptionsPromise = null;
+
+        function loadAllMahasiswaOptions() {
+            if (!mahasiswaOptionsPromise) {
+                mahasiswaOptionsPromise = fetch(`{{ route('api.mahasiswa.all') }}`)
+                    .then((r) => r.json())
+                    .then((data) => data.map((m) => ({
+                        value: String(m.id),
+                        text: m.nim + ' - ' + m.nama + (m.prodi ? ' (' + m.prodi + ')' : ''),
+                    })))
+                    .catch(() => []);
+            }
+            return mahasiswaOptionsPromise;
+        }
+
+        function initMahasiswaSelect(selectEl) {
+            if (!selectEl || selectEl.tomselect) return;
+            const ts = new TomSelect(selectEl, {
+                valueField: 'value',
+                labelField: 'text',
+                searchField: ['text'],
+                create: false,
+                maxItems: 1,
+                // Semua data mahasiswa memang dimuat, tapi jumlah yang
+                // dirender ke DOM tetap dibatasi supaya tidak lag kalau
+                // datanya ribuan baris - begitu diketik, pencarian tetap
+                // menjangkau SELURUH data (bukan cuma yang kebatas ini),
+                // hasilnya makin sedikit & makin relevan sesuai ketikan.
+                maxOptions: 100,
+                // Dropdown dipindah ke <body> supaya tidak kepotong oleh
+                // overflow tabel (.table-responsive) atau ketutup baris di
+                // bawahnya - lihat z-index .ts-dropdown di CSS atas.
+                dropdownParent: 'body',
+                render: {
+                    no_results: function (data, escape) {
+                        return `<div class="no-results">Mahasiswa "${escape(data.input)}" tidak ditemukan</div>`;
+                    },
+                },
+            });
+
+            loadAllMahasiswaOptions().then((options) => {
+                ts.addOptions(options);
+                ts.refreshOptions(false);
+            });
+        }
 
         // Escape HTML string
         function escapeHtml(text) {
@@ -779,9 +855,8 @@
             const nextIdx = mhsCount++;
             row.innerHTML = `
                 <td>
-                    <select name="penulis_mahasiswa[${nextIdx}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell" required>
-                        <option value="">Cari / Pilih Mahasiswa (NIM - Nama)...</option>
-                        ${masterMahasiswaOptions}
+                    <select name="penulis_mahasiswa[${nextIdx}][mahasiswa_id]" class="form-select form-select-sm table-editable-cell mahasiswa-select" required>
+                        <option value="">-- Pilih Mahasiswa --</option>
                     </select>
                 </td>
                 <td>
@@ -810,6 +885,7 @@
                 </td>
             `;
             container.appendChild(row);
+            initMahasiswaSelect(row.querySelector('.mahasiswa-select'));
         }
 
         // 5. Penulis Lain Rows
