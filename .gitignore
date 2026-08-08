@@ -20,3 +20,9 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Laravel Storage
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*

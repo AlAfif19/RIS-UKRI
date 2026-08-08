@@ -54,4 +54,27 @@ return [
         'cache_ttl' => env('UKRI_API_CACHE_TTL', 1440),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | SSO UKRI (login)
+    |--------------------------------------------------------------------------
+    |
+    | Login RIS lewat SSO UKRI (OAuth2 Authorization Code Grant), pola sama
+    | dengan SIKEMAH-UKRI (lihat App\Http\Controllers\Auth\SsoController).
+    | 'base_url' HARUS alamat server SSO (mis. https://sso.ukri.web.id) karena
+    | dipakai membangun /oauth/authorize, /oauth/token, /api/user, /api/logout.
+    | 'redirect' HARUS alamat callback RIS sendiri, dan harus sama persis
+    | dengan yang didaftarkan ke Administrator SSO untuk client_id ini.
+    |
+    */
+
+    'sso' => [
+        'enabled' => env('SSO_ENABLED', false),
+        'base_url' => env('SSO_BASE_URL'),
+        'client_id' => env('SSO_CLIENT_ID'),
+        'client_secret' => env('SSO_CLIENT_SECRET'),
+        'redirect' => env('SSO_REDIRECT_URI'),
+        'timeout' => env('SSO_TIMEOUT', 10),
+    ],
+
 ];

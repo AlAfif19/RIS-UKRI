@@ -15,155 +15,39 @@
 
             <h5 class="card-title text-center pb-0 fs-4 fw-bold">
 
-                UKRI SSO
+                RIS UKRI
 
             </h5>
 
             <p class="text-center small text-muted">
 
-                Centralized Authentication System
+                Research Information System
 
             </p>
 
         </div>
 
-        <form class="row g-3"
-              action="{{ route('login') }}"
-              method="POST">
-
-            @csrf
-
-            {{-- Username --}}
-            <div class="col-12">
-
-                <label class="form-label fw-semibold">
-
-                    Username
-
-                </label>
-
-                <input type="text"
-                       name="username"
-                       class="form-control @error('username') is-invalid @enderror"
-                       value="{{ old('username') }}"
-                       required
-                       autofocus>
-
-                @error('username')
-
-                    <div class="invalid-feedback">
-
-                        {{ $message }}
-
-                    </div>
-
-                @enderror
-
+        @if (session('error'))
+            <div class="alert alert-danger py-2 small mb-3">
+                {{ session('error') }}
             </div>
+        @endif
 
-            {{-- Password --}}
-            <div class="col-12">
-
-                <label class="form-label fw-semibold">
-
-                    Password
-
-                </label>
-
-                <div class="input-group">
-
-                    <input type="password"
-                           name="password"
-                           id="password"
-                           class="form-control @error('password') is-invalid @enderror"
-                           required>
-
-                    <span class="input-group-text bg-white"
-                          id="togglePassword"
-                          style="cursor:pointer;">
-
-                        <i class="bi bi-eye"
-                           id="eyeIcon"></i>
-
-                    </span>
-
-                </div>
-
-                @error('password')
-
-                    <div class="invalid-feedback d-block">
-
-                        {{ $message }}
-
-                    </div>
-
-                @enderror
-
+        {{-- Satu-satunya cara login: SSO UKRI. Tidak ada lagi form
+             username/password mandiri. RIS hanya menerima role "admin"
+             dari SSO. --}}
+        @if (config('services.sso.enabled'))
+            <a href="{{ route('sso.redirect') }}" class="btn btn-primary w-100 fw-bold">
+                Login dengan SSO UKRI
+            </a>
+        @else
+            <div class="alert alert-warning py-2 small mb-0">
+                Login SSO belum dikonfigurasi. Hubungi administrator sistem.
             </div>
-
-            {{-- Remember --}}
-            <div class="col-12">
-
-                <div class="form-check">
-
-                    <input type="checkbox"
-                           name="remember"
-                           class="form-check-input">
-
-                    <label class="form-check-label">
-
-                        Remember Me
-
-                    </label>
-
-                </div>
-
-            </div>
-
-            {{-- Submit --}}
-            <div class="col-12">
-
-                <button class="btn btn-primary w-100 fw-bold"
-                        type="submit">
-
-                    Login
-
-                </button>
-
-            </div>
-
-        </form>
+        @endif
 
     </div>
 
 </div>
-
-<script>
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    const togglePassword = document.getElementById('togglePassword');
-
-    const passwordInput = document.getElementById('password');
-
-    const eyeIcon = document.getElementById('eyeIcon');
-
-    togglePassword.addEventListener('click', function () {
-
-        const type = passwordInput.getAttribute('type') === 'password'
-            ? 'text'
-            : 'password';
-
-        passwordInput.setAttribute('type', type);
-
-        eyeIcon.classList.toggle('bi-eye');
-
-        eyeIcon.classList.toggle('bi-eye-slash');
-
-    });
-
-});
-
-</script>
 
 </x-guest-layout>

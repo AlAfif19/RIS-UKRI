@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\SsoController;
 
 use App\Http\Controllers\PublikasiController;
 use App\Http\Controllers\DashboardAnalitikController;
@@ -35,10 +36,8 @@ Route::middleware('guest')->group(function () {
         [AuthenticatedSessionController::class, 'create']
     )->name('login');
 
-    Route::post(
-        '/login',
-        [AuthenticatedSessionController::class, 'store']
-    );
+    Route::get('/auth/sso/redirect', [SsoController::class, 'redirect'])->name('sso.redirect');
+    Route::get('/auth/sso/callback', [SsoController::class, 'callback'])->name('sso.callback');
 
 });
 
@@ -50,9 +49,11 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
 
+    // Dipakai untuk login manual maupun via SSO — kalau sesi berasal dari SSO
+    // (ada sso_token di session), tokennya di-revoke dulu sebelum logout lokal.
     Route::post(
         '/logout',
-        [AuthenticatedSessionController::class, 'destroy']
+        [SsoController::class, 'logout']
     )->name('logout');
 
 });
