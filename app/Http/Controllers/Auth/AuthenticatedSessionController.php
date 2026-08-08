@@ -3,59 +3,31 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
+/**
+ * Login RIS sekarang HANYA lewat SSO UKRI — tidak ada lagi form login
+ * mandiri (username/password). Halaman /login praktis hanya jadi "pintu
+ * masuk" yang langsung meneruskan ke SsoController::redirect(). RIS hanya
+ * menerima role "admin" dari SSO (lihat SsoController::ALLOWED_ROLES).
+ *
+ * Halaman auth.login tetap dirender (bukan langsung redirect dari sini)
+ * hanya kalau ada pesan error yang perlu ditampilkan ke user (mis. login
+ * SSO gagal, atau akun bukan admin) — supaya pesannya sempat terlihat
+ * sebelum user klik ulang "Login dengan SSO UKRI".
+ *
+ * Logout ditangani oleh SsoController::logout() (lihat routes/web.php),
+ * bukan controller ini.
+ */
 class AuthenticatedSessionController extends Controller
 {
-    /**
-     * Display the login view.
-     */
-    public function create(): View
+    public function create(): View|RedirectResponse
     {
-        return view('auth.login');
-    }
-
-    /**
-     * Handle an incoming authentication request.
-     */
-    public function store(LoginRequest $request): RedirectResponse
-    {
-        $request->authenticate();
-        $request->session()->regenerate();
-
-        // dd(
-        //     Auth::check(),
-        //     Auth::user()?->roles?->pluck('name'),
-        //     Auth::user()?->username,
-        // );
-
-        // dd(
-        //     session()->get('url.intended'),
-        //     Auth::user()->username,
-        //     Auth::user()->getRoleNames()
-        // );
-
-        if (session()->has('url.intended')) {
-            return redirect()->intended();
+        if (session()->has('error')) {
+            return view('auth.login');
         }
-        return redirect()->route('dashboard');
-    }
 
-    /**
-     * Destroy an authenticated session.
-     */
-    public function destroy(Request $request): RedirectResponse
-    {
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-
-        $request->session()->regenerateToken();
-
-        return redirect('/');
+        return redirect()->route('sso.redirect');
     }
 }

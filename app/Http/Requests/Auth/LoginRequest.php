@@ -53,10 +53,18 @@ class LoginRequest extends FormRequest
         $this->ensureIsNotRateLimited();
 
         /**
-         * Attempt login
+         * Attempt login. Form field-nya masih bernama "username" (label di
+         * tampilan login), tapi tabel `users` hanya punya kolom `email`
+         * (tidak ada kolom `username`) — jadi nilainya dicocokkan ke `email`.
+         * Sebelum perbaikan ini, Auth::attempt(['username' => ...]) selalu
+         * gagal dengan SQL error "Unknown column 'username'" untuk SIAPA PUN
+         * yang login manual, terlepas dari kredensialnya benar atau salah.
          */
         if (! Auth::attempt(
-            $this->only('username', 'password'),
+            [
+                'email' => $this->input('username'),
+                'password' => $this->input('password'),
+            ],
             $this->boolean('remember')
         )) {
 
