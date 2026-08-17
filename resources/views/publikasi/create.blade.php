@@ -348,11 +348,11 @@
                                         placeholder="Nama jurnal tempat dipublikasikan">
                                 </div>
 
-                                <!-- ISSN -->
+                                <!-- ISSN / ISBN -->
                                 <div class="col-md-6">
-                                    <label for="issn" class="form-label">ISSN</label>
+                                    <label for="issn" class="form-label">ISSN / ISBN</label>
                                     <input type="text" name="issn" id="issn" class="form-control form-control-sm"
-                                        placeholder="xxxx-xxxx">
+                                        placeholder="ISSN: xxxx-xxxx atau ISBN: xxx-x-xx-xxxxxx-x">
                                 </div>
 
                                 <!-- Tautan Laman Jurnal -->
@@ -875,15 +875,17 @@
         // ISSN - diformat otomatis jadi xxxx-xxxx sambil mengetik: begitu
         // karakter ke-5 diketik, dash disisipkan otomatis sebelum karakter
         // itu (jadi "1234" -> ketik "5" -> otomatis jadi "1234-5"). Huruf
-        // "X"/"x" tetap diperbolehkan (dipakai di ISSN sebagai check digit)
-        // dan otomatis di-uppercase; total 8 karakter (belum termasuk dash).
+        // Field ini menerima ISSN (xxxx-xxxx, 8 digit) ATAUPUN ISBN
+        // (mis. 978-3-16-148410-0, 10-13 digit), jadi tidak lagi dipaksa ke
+        // format ISSN. "X"/"x" tetap diperbolehkan (dipakai sebagai check
+        // digit ISSN/ISBN-10) dan otomatis di-uppercase; strip boleh diketik
+        // manual sesuai posisi masing-masing.
         (function () {
             const issnInput = document.getElementById('issn');
             if (!issnInput) return;
-            issnInput.setAttribute('maxlength', 9);
+            issnInput.setAttribute('maxlength', 20);
             issnInput.addEventListener('input', function () {
-                let raw = issnInput.value.toUpperCase().replace(/[^0-9X]/g, '').slice(0, 8);
-                issnInput.value = raw.length > 4 ? raw.slice(0, 4) + '-' + raw.slice(4) : raw;
+                issnInput.value = issnInput.value.toUpperCase().replace(/[^0-9X-]/g, '');
             });
         })();
 
@@ -1024,23 +1026,6 @@
             const today = new Date().toISOString().split('T')[0]; // yyyy-mm-dd
 
             // Move the file input to this row, and replace it in the preview form
-            const hiddenFileContainer = document.createElement('div');
-            hiddenFileContainer.style.display = 'none';
-            if (file) {
-                fileInput.name = `dokumen[${idx}][file]`;
-                fileInput.id = ''; // clear ID
-                hiddenFileContainer.appendChild(fileInput);
-
-                // Recreate the file input in the form
-                const newFileInput = document.createElement('input');
-                newFileInput.type = 'file';
-                newFileInput.id = 'new_doc_file';
-                newFileInput.className = 'form-control form-control-sm';
-                newFileInput.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt';
-                document.getElementById('new_doc_file_wrapper').innerHTML = '';
-                document.getElementById('new_doc_file_wrapper').appendChild(newFileInput);
-            }
-
             row.innerHTML = `
                 <td class="text-center doc-row-num"></td>
                 <td>
@@ -1062,14 +1047,32 @@
                 </td>
             `;
 
-            row.appendChild(hiddenFileContainer);
+            if (file) {
+                fileInput.name = `dokumen[${idx}][file]`;
+                fileInput.id = ''; // clear ID
+                fileInput.style.display = 'none';
+                row.children[1].appendChild(fileInput);
+
+                // Recreate the file input in the form
+                const newFileInput = document.createElement('input');
+                newFileInput.type = 'file';
+                newFileInput.id = 'new_doc_file';
+                newFileInput.className = 'form-control form-control-sm';
+                newFileInput.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt';
+                document.getElementById('new_doc_file_wrapper').innerHTML = '';
+                document.getElementById('new_doc_file_wrapper').appendChild(newFileInput);
+            }
+
             container.appendChild(row);
 
             // Reset inputs
             nameInput.value = '';
             descInput.value = '';
             linkInput.value = '';
-            fileInput.value = '';
+            const activeFileInput = document.getElementById('new_doc_file');
+            if (activeFileInput) {
+                activeFileInput.value = '';
+            }
 
             updateDocNumbers();
             revalidateAfterChange();

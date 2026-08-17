@@ -203,7 +203,7 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label for="issn" class="form-label">ISSN</label>
+                                <label for="issn" class="form-label">ISSN / ISBN</label>
                                 <input type="text" name="issn" id="issn" class="form-control form-control-sm" value="{{ $publikasi->issn }}">
                             </div>
 
@@ -537,7 +537,7 @@
                                     @foreach($publikasi->penulisLain as $idx => $pl)
                                         <tr class="row-penulis-lain">
                                             <td>
-                                                <input type="text" name="penulis_lain[{{ $idx }}][nama]" class="form-control form-control-sm table-editable-cell" value="{{ $pl->nama }}" required>
+                                                <input type="text" name="penulis_lain[{{ $idx }}][nama]" id="penulis_lain_nama_{{ $idx }}" class="form-control form-control-sm table-editable-cell penulis-lain-nama-select" value="{{ $pl->nama }}" required>
                                             </td>
                                             <td>
                                                 <input type="number" name="penulis_lain[{{ $idx }}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="{{ $pl->urutan }}">
@@ -807,23 +807,100 @@
         });
     }
 
-    // ISSN - diformat otomatis jadi xxxx-xxxx sambil mengetik, pola sama
-    // dengan create.blade.php.
+    // ISSN / ISBN - pola sama dengan create.blade.php: hanya membatasi
+    // karakter ke digit, X/x, dan strip, tanpa memaksa format 8 digit ISSN
+    // supaya ISBN (10-13 digit) juga bisa diketik dengan benar.
     (function () {
         const issnInput = document.getElementById('issn');
         if (!issnInput) return;
-        issnInput.setAttribute('maxlength', 9);
+        issnInput.setAttribute('maxlength', 20);
         issnInput.addEventListener('input', function () {
-            let raw = issnInput.value.toUpperCase().replace(/[^0-9X]/g, '').slice(0, 8);
-            issnInput.value = raw.length > 4 ? raw.slice(0, 4) + '-' + raw.slice(4) : raw;
+            issnInput.value = issnInput.value.toUpperCase().replace(/[^0-9X-]/g, '');
         });
     })();
+
+    // Nama Kolaborator (Penulis Lain) - pola sama persis dengan
+    // create.blade.php: dropdown autocomplete dari nama-nama yang pernah
+    // diinput sebelumnya (lintas SEMUA publikasi, tidak dibatasi per
+    // dosen), tapi tetap boleh mengetik nama baru kalau memang belum
+    // pernah ada (create:true). Sebelumnya field ini di edit.blade.php
+    // cuma <input type="text"> polos tanpa Tom Select sama sekali -
+    // beda dengan create.blade.php - jadi tidak selaras antara form
+    // tambah & edit, baik untuk role admin maupun dosen (endpoint
+    // api.penulis-lain.all sendiri sudah bisa diakses keduanya, lihat
+    // grup middleware 'auth','role:admin|dosen' di routes/web.php).
+    let penulisLainOptionsPromise = null;
+
+    function loadAllPenulisLainOptions() {
+        if (!penulisLainOptionsPromise) {
+            penulisLainOptionsPromise = fetch(`{{ route('api.penulis-lain.all') }}`)
+                .then((r) => r.json())
+                .then((data) => data.map((row) => ({
+                    value: row.nama,
+                    text: row.nama,
+                    afiliasi: row.afiliasi,
+                })))
+                .catch(() => []);
+        }
+        return penulisLainOptionsPromise;
+    }
+
+    function initPenulisLainSelect(inputEl) {
+        if (!inputEl || inputEl.tomselect) return;
+        const initialValue = inputEl.value;
+        const ts = new TomSelect(inputEl, {
+            valueField: 'value',
+            labelField: 'text',
+            searchField: ['text'],
+            create: true,
+            createOnBlur: true,
+            persist: false,
+            maxItems: 1,
+            maxOptions: 100,
+            dropdownParent: 'body',
+            render: {
+                option_create: function (data, escape) {
+                    return `<div class="create">Belum pernah ada - pakai sebagai kolaborator baru: <strong>"${escape(data.input)}"</strong></div>`;
+                },
+                no_results: function (data, escape) {
+                    return `<div class="no-results">Tidak ada kolaborator tersimpan yang mirip "${escape(data.input)}"</div>`;
+                },
+            },
+            onItemAdd: function (value) {
+                // Kalau yang dipilih adalah kolaborator LAMA (bukan hasil
+                // ketik nama baru), isikan otomatis Afiliasi di baris
+                // yang sama dari data terakhir kali dia diinput - tapi
+                // cuma kalau field Afiliasi baris itu masih kosong,
+                // supaya tidak menimpa yang sudah sengaja diisi manual.
+                const opt = ts.options[value];
+                if (!opt || !opt.afiliasi) return;
+                const row = inputEl.closest('tr');
+                const afiliasiInput = row ? row.querySelector('input[name*="[afiliasi]"]') : null;
+                if (afiliasiInput && !afiliasiInput.value.trim()) {
+                    afiliasiInput.value = opt.afiliasi;
+                }
+            },
+        });
+
+        loadAllPenulisLainOptions().then((options) => {
+            ts.addOptions(options);
+            ts.refreshOptions(false);
+            // Nilai yang sudah tersimpan sebelumnya (dari database) tetap
+            // dipertahankan sebagai item terpilih, walau kebetulan tidak ada
+            // di daftar (misal sudah diedit manual di DB).
+            if (initialValue) {
+                ts.addOption({ value: initialValue, text: initialValue });
+                ts.setValue(initialValue, true);
+            }
+        });
+    }
 
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('#containerPenulisDosen .dosen-select').forEach(initDosenSelect);
         document.querySelectorAll('#containerPenulisMahasiswa .mahasiswa-select').forEach(initMahasiswaSelect);
         initJurnalSelect(document.getElementById('nama_jurnal'));
         initPenerbitSelect(document.getElementById('penerbit'));
+        document.querySelectorAll('#containerPenulisLain .penulis-lain-nama-select').forEach(initPenulisLainSelect);
     });
 
     // Escape HTML string
@@ -920,24 +997,6 @@
         
         const today = new Date().toISOString().split('T')[0]; // yyyy-mm-dd
         
-        // Move the file input to this row, and replace it in the preview form
-        const hiddenFileContainer = document.createElement('div');
-        hiddenFileContainer.style.display = 'none';
-        if (file) {
-            fileInput.name = `dokumen[${idx}][file]`;
-            fileInput.id = ''; // clear ID
-            hiddenFileContainer.appendChild(fileInput);
-            
-            // Recreate the file input in the form
-            const newFileInput = document.createElement('input');
-            newFileInput.type = 'file';
-            newFileInput.id = 'new_doc_file';
-            newFileInput.className = 'form-control form-control-sm';
-            newFileInput.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt';
-            document.getElementById('new_doc_file_wrapper').innerHTML = '';
-            document.getElementById('new_doc_file_wrapper').appendChild(newFileInput);
-        }
-        
         row.innerHTML = `
             <td class="text-center doc-row-num"></td>
             <td>
@@ -958,16 +1017,34 @@
                 </button>
             </td>
         `;
-        
-        row.appendChild(hiddenFileContainer);
+
+        if (file) {
+            fileInput.name = `dokumen[${idx}][file]`;
+            fileInput.id = ''; // clear ID
+            fileInput.style.display = 'none';
+            row.children[1].appendChild(fileInput);
+
+            // Recreate the file input in the form
+            const newFileInput = document.createElement('input');
+            newFileInput.type = 'file';
+            newFileInput.id = 'new_doc_file';
+            newFileInput.className = 'form-control form-control-sm';
+            newFileInput.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt';
+            document.getElementById('new_doc_file_wrapper').innerHTML = '';
+            document.getElementById('new_doc_file_wrapper').appendChild(newFileInput);
+        }
+
         container.appendChild(row);
-        
+
         // Reset inputs
         nameInput.value = '';
         descInput.value = '';
         linkInput.value = '';
-        fileInput.value = '';
-        
+        const activeFileInput = document.getElementById('new_doc_file');
+        if (activeFileInput) {
+            activeFileInput.value = '';
+        }
+
         updateDocNumbers();
     }
 
@@ -1082,7 +1159,7 @@
         const nextIdx = lainCount++;
         row.innerHTML = `
             <td>
-                <input type="text" name="penulis_lain[${nextIdx}][nama]" class="form-control form-control-sm table-editable-cell" placeholder="Nama Lengkap Kolaborator" required>
+                <input type="text" name="penulis_lain[${nextIdx}][nama]" id="penulis_lain_nama_${nextIdx}" class="form-control form-control-sm table-editable-cell penulis-lain-nama-select" placeholder="Nama Lengkap Kolaborator" required>
             </td>
             <td>
                 <input type="number" name="penulis_lain[${nextIdx}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="${container.children.length + 1}">
@@ -1110,6 +1187,7 @@
             </td>
         `;
         container.appendChild(row);
+        initPenulisLainSelect(row.querySelector('.penulis-lain-nama-select'));
     }
 
     function removeRow(btn) {

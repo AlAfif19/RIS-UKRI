@@ -8,6 +8,7 @@ use App\Models\MasterPerguruanTinggi;
 use App\Models\MasterAktivitasLitabmas;
 use App\Models\Dosen;
 use App\Models\Mahasiswa;
+use App\Models\Prodi;
 
 class DashboardAnalitikController extends Controller
 {
@@ -172,94 +173,191 @@ class DashboardAnalitikController extends Controller
         if ($request->filled('kategori_capaian')) {
             $query->where('kategori_capaian', $request->kategori_capaian);
         }
-        if ($request->filled('perguruan_tinggi_id')) {
-            $ptId = $request->perguruan_tinggi_id;
-            $ptNamaNormalized = optional(
-                MasterPerguruanTinggi::find($ptId)
-            )->nama_pt;
-            $ptNamaNormalized = $ptNamaNormalized !== null
-                ? \Illuminate\Support\Str::lower(trim($ptNamaNormalized))
-                : null;
+        if ($request->filled('dosen_id')) {
+            // Filter "Nama Dosen" - hanya relevan untuk admin (dosen
+            // non-admin sudah otomatis dibatasi ke datanya sendiri lewat
+            // currentAuthorIds() di atas, jadi filter ini tidak perlu
+            // ditampilkan untuknya, tapi tetap aman diproses di sini kalau
+            // parameternya dikirim manual).
+            $dosenId = $request->dosen_id;
+            $query->whereExists(function ($sq) use ($dosenId) {
+                $sq->select(DB::raw(1))
+                    ->from('publikasi_penulis_dosen as ppd')
+                    ->whereColumn('ppd.publikasi_id', 'publikasi.id')
+                    ->where('ppd.dosen_id', $dosenId);
+            });
+        }
+        // PERBAIKAN: filter ini sebelumnya bernama `perguruan_tinggi_id` dan
+        // nilainya HARUS berupa id baris master_perguruan_tinggi - padahal
+        // dropdown-nya berlabel "Afiliasi" dan di praktiknya banyak afiliasi
+        // (terutama yang diisi manual di Penulis Lain, mis. "ULBI") sama
+        // sekali TIDAK punya baris master_perguruan_tinggi. Akibatnya afiliasi
+        // seperti itu mustahil dipilih dari dropdown sama sekali (tidak ada
+        // id untuk dikirim), walau field teksnya sudah benar tersimpan dan
+        // sudah muncul di ranking "Kontribusi per Afiliasi". Sekarang filter
+        // dikirim sebagai NAMA (teks) afiliasi, dicocokkan lewat
+        // getAfiliasiRows() - sumber yang sama persis dengan yang dipakai
+        // untuk mengisi dropdown-nya (lihat index()) maupun ranking-nya (lihat
+        // buildDashboardData()), supaya ketiganya selalu konsisten.
+        if ($request->filled('afiliasi')) {
+            $afiliasiNormalized = \Illuminate\Support\Str::lower(trim($request->afiliasi));
+
+            // Kalau nama yang dipilih persis cocok salah satu PT di master
+            // data, ambil juga id-nya supaya tetap bisa dicocokkan lewat
+            // relasi struktural (master_perguruan_tinggi_id) - bukan cuma
+            // field teks "Afiliasi" manual, yang seringkali dikosongkan
+            // walau PT dosen/mahasiswanya sudah jelas lewat relasi.
+            $matchedPt = MasterPerguruanTinggi::whereRaw('LOWER(TRIM(nama_pt)) = ?', [$afiliasiNormalized])->first();
             $ukriPtId = $this->ukriPtId();
-            $isUkriSelected = $ukriPtId !== null && (int) $ptId === (int) $ukriPtId;
+            $isUkriSelected = $matchedPt !== null && $ukriPtId !== null && (int) $matchedPt->id === (int) $ukriPtId;
 
-            // Sebelumnya filter ini HANYA mencocokkan lewat relasi struktural
-            // (master_perguruan_tinggi_id Dosen), sementara ranking "Kontribusi
-            // per Afiliasi" di bawah sudah berbasis field teks "Afiliasi" yang
-            // diisi manual per Penulis (Dosen/Mahasiswa/Lain). Akibatnya kalau
-            // filter ini dipakai, publikasi yang afiliasi teksnya cocok tapi
-            // PT dosennya beda (atau afiliasi ditulis oleh Mahasiswa/Penulis
-            // Lain yang sama sekali tidak terhubung ke Dosen manapun) jadi ikut
-            // tersaring keluar - makanya jumlah yang muncul lebih kecil dari
-            // jumlah afiliasi teks yang sebenarnya ada. Di bawah ini digabung:
-            // publikasi ikut lolos filter kalau salah satu dari dua kondisi
-            // terpenuhi.
-            //
-            // PERBAIKAN: ditambah kondisi ke-3 khusus saat yang dipilih adalah
-            // UKRI sendiri. Dosen/mahasiswa hasil sinkronisasi Master Data API
-            // UKRI (ukri_id terisi) TIDAK PERNAH punya master_perguruan_tinggi_id
-            // (lihat catatan di ukriPtId()) dan juga jarang diisi field teks
-            // "Afiliasi"-nya, jadi kondisi 1 & 2 di atas sama sekali tidak
-            // menjaring mereka - inilah yang bikin jumlah publikasi UKRI
-            // berkurang saat filter "Universitas Kebangsaan Republik Indonesia"
-            // dipakai, padahal publikasinya jelas milik UKRI.
-            $query->where(function ($outer) use ($ptId, $ptNamaNormalized, $isUkriSelected) {
-                // 1) Relasi struktural: PT di-override langsung pada baris
-                //    publikasi_penulis_dosen, atau fallback ke PT asal Dosen.
-                $outer->whereExists(function ($q) use ($ptId, $isUkriSelected) {
-                    $q->select(DB::raw(1))
-                        ->from('publikasi_penulis_dosen as ppd')
-                        ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
-                        ->whereColumn('ppd.publikasi_id', 'publikasi.id')
-                        ->where(function ($qq) use ($ptId, $isUkriSelected) {
-                            $qq->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) = ?', [$ptId]);
-                            if ($isUkriSelected) {
-                                $qq->orWhere(function ($native) {
-                                    $native->whereNull('ppd.master_perguruan_tinggi_id')
-                                        ->whereNull('dosen.master_perguruan_tinggi_id')
-                                        ->whereNotNull('dosen.ukri_id');
-                                });
-                            }
-                        });
-                });
+            $query->where(function ($outer) use ($matchedPt, $afiliasiNormalized, $isUkriSelected) {
+                if ($matchedPt !== null) {
+                    $ptId = $matchedPt->id;
 
-                // 1b) Sama seperti (1) tapi untuk Penulis Mahasiswa - sebelumnya
-                //     relasi struktural mahasiswa (master_perguruan_tinggi_id)
-                //     sama sekali tidak dicek di sini (hanya field teksnya lewat
-                //     kondisi 2), jadi ditambahkan juga di sini.
-                $outer->orWhereExists(function ($q) use ($ptId, $isUkriSelected) {
-                    $q->select(DB::raw(1))
-                        ->from('publikasi_penulis_mahasiswa as ppm')
-                        ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
-                        ->whereColumn('ppm.publikasi_id', 'publikasi.id')
-                        ->where(function ($qq) use ($ptId, $isUkriSelected) {
-                            $qq->where('mahasiswa.master_perguruan_tinggi_id', $ptId);
-                            if ($isUkriSelected) {
-                                $qq->orWhere(function ($native) {
-                                    $native->whereNull('mahasiswa.master_perguruan_tinggi_id')
-                                        ->whereNotNull('mahasiswa.ukri_id');
-                                });
-                            }
-                        });
-                });
+                    // 1) Relasi struktural: PT di-override langsung pada baris
+                    //    publikasi_penulis_dosen, atau fallback ke PT asal Dosen.
+                    //    Ditambah kondisi khusus dosen/mahasiswa native UKRI
+                    //    (ukri_id terisi tapi master_perguruan_tinggi_id-nya
+                    //    NULL - lihat catatan panjang di ukriPtId()) kalau yang
+                    //    dipilih adalah UKRI sendiri.
+                    $outer->orWhereExists(function ($q) use ($ptId, $isUkriSelected) {
+                        $q->select(DB::raw(1))
+                            ->from('publikasi_penulis_dosen as ppd')
+                            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+                            ->whereColumn('ppd.publikasi_id', 'publikasi.id')
+                            ->where(function ($qq) use ($ptId, $isUkriSelected) {
+                                $qq->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) = ?', [$ptId]);
+                                if ($isUkriSelected) {
+                                    $qq->orWhere(function ($native) {
+                                        $native->whereNull('ppd.master_perguruan_tinggi_id')
+                                            ->whereNull('dosen.master_perguruan_tinggi_id')
+                                            ->whereNotNull('dosen.ukri_id');
+                                    });
+                                }
+                            });
+                    });
+
+                    // 1b) Sama seperti (1) tapi untuk Penulis Mahasiswa.
+                    $outer->orWhereExists(function ($q) use ($ptId, $isUkriSelected) {
+                        $q->select(DB::raw(1))
+                            ->from('publikasi_penulis_mahasiswa as ppm')
+                            ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+                            ->whereColumn('ppm.publikasi_id', 'publikasi.id')
+                            ->where(function ($qq) use ($ptId, $isUkriSelected) {
+                                $qq->where('mahasiswa.master_perguruan_tinggi_id', $ptId);
+                                if ($isUkriSelected) {
+                                    $qq->orWhere(function ($native) {
+                                        $native->whereNull('mahasiswa.master_perguruan_tinggi_id')
+                                            ->whereNotNull('mahasiswa.ukri_id');
+                                    });
+                                }
+                            });
+                    });
+                }
 
                 // 2) Field teks "Afiliasi" (Dosen, Mahasiswa, maupun Penulis
                 //    Lain) sama persis (case-insensitive, spasi diabaikan)
-                //    dengan nama PT yang dipilih.
-                if ($ptNamaNormalized !== null) {
-                    foreach (['publikasi_penulis_dosen', 'publikasi_penulis_mahasiswa', 'publikasi_penulis_lain'] as $table) {
-                        $outer->orWhereExists(function ($q) use ($table, $ptNamaNormalized) {
-                            $q->select(DB::raw(1))
-                                ->from("{$table} as p")
-                                ->whereColumn('p.publikasi_id', 'publikasi.id')
-                                ->whereRaw('LOWER(TRIM(p.afiliasi)) = ?', [$ptNamaNormalized]);
-                        });
-                    }
+                //    dengan nama afiliasi yang dipilih - inilah satu-satunya
+                //    cara mencocokkan afiliasi seperti "ULBI" yang diisi
+                //    manual di Penulis Lain dan tidak punya padanan di
+                //    master_perguruan_tinggi sama sekali.
+                foreach (['publikasi_penulis_dosen', 'publikasi_penulis_mahasiswa', 'publikasi_penulis_lain'] as $table) {
+                    $outer->orWhereExists(function ($q) use ($table, $afiliasiNormalized) {
+                        $q->select(DB::raw(1))
+                            ->from("{$table} as p")
+                            ->whereColumn('p.publikasi_id', 'publikasi.id')
+                            ->whereRaw('LOWER(TRIM(p.afiliasi)) = ?', [$afiliasiNormalized]);
+                    });
                 }
             });
         }
 
+        // Filter per Program Studi (khusus dosen/mahasiswa UKRI sendiri hasil
+        // sinkronisasi Master Data API - lihat App\Models\Dosen::prodi() /
+        // App\Models\Mahasiswa::prodi(); co-author eksternal dari PT lain
+        // tidak punya prodi_id sehingga otomatis tidak ikut ke sini).
+        if ($request->filled('prodi_id')) {
+            $prodiId = $request->prodi_id;
+            $query->where(function ($outer) use ($prodiId) {
+                $outer->whereExists(function ($q) use ($prodiId) {
+                    $q->select(DB::raw(1))
+                        ->from('publikasi_penulis_dosen as ppd')
+                        ->join('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+                        ->whereColumn('ppd.publikasi_id', 'publikasi.id')
+                        ->where('dosen.prodi_id', $prodiId);
+                })->orWhereExists(function ($q) use ($prodiId) {
+                    $q->select(DB::raw(1))
+                        ->from('publikasi_penulis_mahasiswa as ppm')
+                        ->join('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+                        ->whereColumn('ppm.publikasi_id', 'publikasi.id')
+                        ->where('mahasiswa.prodi_id', $prodiId);
+                });
+            });
+        }
+
         return $query;
+    }
+
+    /**
+     * Ambil seluruh baris (publikasi_id, afiliasi) dari Penulis Dosen,
+     * Mahasiswa, dan Lain yang publikasi_id-nya ada di $idsQuery - sudah
+     * di-dedupe per pasangan (publikasi_id, afiliasi) dan sudah mengecualikan
+     * PT dummy seeder & baris dosen/mahasiswa dummy. Dipakai bersama oleh
+     * ranking "Kontribusi per Afiliasi" (buildDashboardData()) MAUPUN daftar
+     * pilihan dropdown filter "Afiliasi" (index()), supaya keduanya selalu
+     * konsisten - termasuk untuk afiliasi teks bebas seperti "ULBI" yang
+     * diisi manual di Penulis Lain dan tidak punya padanan di
+     * master_perguruan_tinggi.
+     */
+    private function getAfiliasiRows($idsQuery): \Illuminate\Support\Collection
+    {
+        $demoPtNamaLower = MasterPerguruanTinggi::whereIn('kode_pt', self::DEMO_PT_KODE)
+            ->pluck('nama_pt')
+            ->map(fn($nama) => \Illuminate\Support\Str::lower(trim($nama)))
+            ->all();
+        $ukriNamaPt = optional(MasterPerguruanTinggi::where('kode_pt', self::UKRI_PT_KODE)->first())->nama_pt;
+
+        $afiliasiDosenRows = DB::table('publikasi_penulis_dosen as ppd')
+            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+            ->leftJoin('master_perguruan_tinggi as mpt_ppd', 'mpt_ppd.id', '=', 'ppd.master_perguruan_tinggi_id')
+            ->leftJoin('master_perguruan_tinggi as mpt_dosen', 'mpt_dosen.id', '=', 'dosen.master_perguruan_tinggi_id')
+            ->whereIn('ppd.publikasi_id', $idsQuery)
+            ->where(function ($q) {
+                $q->whereNull('dosen.nidn')->orWhereNotIn('dosen.nidn', self::DEMO_DOSEN_NIDN);
+            })
+            ->selectRaw(
+                "ppd.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppd.afiliasi), ''), mpt_ppd.nama_pt, mpt_dosen.nama_pt, CASE WHEN dosen.ukri_id IS NOT NULL THEN ? END) as afiliasi",
+                [$ukriNamaPt]
+            )
+            ->get();
+
+        $afiliasiMahasiswaRows = DB::table('publikasi_penulis_mahasiswa as ppm')
+            ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+            ->leftJoin('master_perguruan_tinggi as mpt_mhs', 'mpt_mhs.id', '=', 'mahasiswa.master_perguruan_tinggi_id')
+            ->whereIn('ppm.publikasi_id', $idsQuery)
+            ->where(function ($q) {
+                $q->whereNull('mahasiswa.nim')->orWhereNotIn('mahasiswa.nim', self::DEMO_MAHASISWA_NIM);
+            })
+            ->selectRaw(
+                "ppm.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppm.afiliasi), ''), mpt_mhs.nama_pt, CASE WHEN mahasiswa.ukri_id IS NOT NULL THEN ? END) as afiliasi",
+                [$ukriNamaPt]
+            )
+            ->get();
+
+        $afiliasiLainRows = DB::table('publikasi_penulis_lain')
+            ->whereIn('publikasi_id', $idsQuery)
+            ->whereNotNull('afiliasi')
+            ->where('afiliasi', '<>', '')
+            ->select('publikasi_id', 'afiliasi')
+            ->get();
+
+        return $afiliasiDosenRows
+            ->concat($afiliasiMahasiswaRows)
+            ->concat($afiliasiLainRows)
+            ->filter(fn($row) => filled($row->afiliasi))
+            ->reject(fn($row) => in_array(\Illuminate\Support\Str::lower(trim($row->afiliasi)), $demoPtNamaLower, true))
+            ->unique(fn($row) => $row->publikasi_id . '|' . \Illuminate\Support\Str::lower(trim($row->afiliasi)));
     }
 
     public function index(Request $request)
@@ -271,56 +369,57 @@ class DashboardAnalitikController extends Controller
             return response()->json($data);
         }
 
-        // Dosen non-admin hanya perlu memilih di antara PT yang benar-benar
-        // muncul di publikasinya sendiri (lihat currentAuthorIds() /
-        // getFilteredPublikasiQuery()) - bukan PT dari publikasi dosen lain.
+        // Dosen non-admin hanya perlu memilih di antara afiliasi/prodi yang
+        // benar-benar muncul di publikasinya sendiri (lihat currentAuthorIds() /
+        // getFilteredPublikasiQuery()) - bukan milik dosen lain.
         $filteredIdsForDropdown = $this->getFilteredPublikasiQuery($request)->select('id');
 
-        $usedPtIds = DB::table('publikasi_penulis_dosen as ppd')
-            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+        // Dropdown "Afiliasi" - dibangun dari sumber yang SAMA PERSIS dengan
+        // ranking "Kontribusi per Afiliasi" (lihat getAfiliasiRows()), supaya
+        // afiliasi teks bebas seperti "ULBI" yang diisi manual di Penulis
+        // Lain juga ikut muncul sebagai pilihan filter - sebelumnya dropdown
+        // ini hanya berisi baris master_perguruan_tinggi, jadi afiliasi tanpa
+        // padanan PT sama sekali tidak bisa dipilih.
+        $data['afiliasiList'] = $this->getAfiliasiRows($filteredIdsForDropdown)
+            ->map(fn($row) => trim($row->afiliasi))
+            ->unique(fn($nama) => \Illuminate\Support\Str::lower($nama))
+            ->sort(fn($a, $b) => strcasecmp($a, $b))
+            ->values();
+
+        // Dropdown "Program Studi" - hanya prodi UKRI sendiri yang benar-benar
+        // punya kontribusi publikasi (lewat dosen atau mahasiswa native UKRI).
+        $usedProdiIds = DB::table('publikasi_penulis_dosen as ppd')
+            ->join('dosen', 'dosen.id', '=', 'ppd.dosen_id')
             ->whereIn('ppd.publikasi_id', $filteredIdsForDropdown)
-            ->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) IS NOT NULL')
-            ->select(DB::raw('DISTINCT COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) as pt_id'))
+            ->whereNotNull('dosen.prodi_id')
+            ->select(DB::raw('DISTINCT dosen.prodi_id as prodi_id'))
             ->union(
                 DB::table('publikasi_penulis_mahasiswa as ppm')
-                    ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+                    ->join('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
                     ->whereIn('ppm.publikasi_id', $filteredIdsForDropdown)
-                    ->whereNotNull('mahasiswa.master_perguruan_tinggi_id')
-                    ->select(DB::raw('DISTINCT mahasiswa.master_perguruan_tinggi_id as pt_id'))
+                    ->whereNotNull('mahasiswa.prodi_id')
+                    ->select(DB::raw('DISTINCT mahasiswa.prodi_id as prodi_id'))
             );
 
-        // PERBAIKAN: UKRI sendiri harus selalu muncul di dropdown kalau
-        // memang punya publikasi (lihat catatan panjang di ukriPtId()) -
-        // dosen/mahasiswa native UKRI (ukri_id terisi) sering tidak punya
-        // master_perguruan_tinggi_id sama sekali, jadi tidak selalu ikut
-        // ter-detect lewat $usedPtIds di atas. Untuk dosen non-admin, tetap
-        // dibatasi ke publikasi miliknya sendiri (whereIn publikasi_id).
-        $ukriPtId = $this->ukriPtId();
-        $ukriPunyaKontribusi = $ukriPtId !== null && (
-            DB::table('publikasi_penulis_dosen as ppd')
-                ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
-                ->whereIn('ppd.publikasi_id', $filteredIdsForDropdown)
-                ->whereNotNull('dosen.ukri_id')
-                ->exists()
-            || DB::table('publikasi_penulis_mahasiswa as ppm')
-                ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
-                ->whereIn('ppm.publikasi_id', $filteredIdsForDropdown)
-                ->whereNotNull('mahasiswa.ukri_id')
-                ->exists()
-        );
-
-        // Dropdown filter hanya menampilkan PT yang benar-benar punya kontribusi
-        // publikasi (bukan sekadar ada di master data), sekaligus tetap
-        // menyembunyikan PT dummy bawaan seeder kalau baris-nya belum dihapus.
-        $data['perguruanTinggiList'] = MasterPerguruanTinggi::whereNotIn('kode_pt', self::DEMO_PT_KODE)
-            ->where(function ($q) use ($usedPtIds, $ukriPtId, $ukriPunyaKontribusi) {
-                $q->whereIn('id', $usedPtIds);
-                if ($ukriPunyaKontribusi) {
-                    $q->orWhere('id', $ukriPtId);
-                }
-            })
-            ->orderBy('nama_pt')
+        $data['prodiList'] = Prodi::whereIn('id', $usedProdiIds)
+            ->orderBy('nama_prodi')
             ->get();
+
+        // Dropdown filter "Nama Dosen" - dibatasi ke dosen yang benar-benar
+        // punya publikasi (sesuai publikasi yang sudah lolos filter lain,
+        // sama seperti pola $usedProdiIds di atas), sekaligus tetap
+        // menyembunyikan dosen dummy bawaan seeder. Hanya berguna untuk
+        // admin (lihat kondisi $isAdmin di view) - dosen non-admin sudah
+        // otomatis melihat datanya sendiri saja lewat currentAuthorIds().
+        $dosenIdsWithPublikasi = DB::table('publikasi_penulis_dosen as ppd')
+            ->whereIn('ppd.publikasi_id', $filteredIdsForDropdown)
+            ->select('ppd.dosen_id')
+            ->distinct();
+
+        $data['dosenList'] = Dosen::whereIn('id', $dosenIdsWithPublikasi)
+            ->whereNotIn('nidn', self::DEMO_DOSEN_NIDN)
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'nidn']);
 
         return view('dashboard-analitik.index', $data);
     }
@@ -503,92 +602,21 @@ class DashboardAnalitikController extends Controller
 
         // 7b. Kontribusi per Afiliasi (field teks "Afiliasi" yang diisi manual
         // di form Publikasi Karya - untuk Penulis Dosen, Penulis Mahasiswa,
-        // maupun Penulis Lain).
+        // maupun Penulis Lain - dengan fallback ke PT lewat relasi struktural
+        // kalau field teksnya kosong). Baris mentahnya diambil dari
+        // getAfiliasiRows() supaya konsisten dengan dropdown filter
+        // "Afiliasi" di index() maupun dengan filter `afiliasi` di
+        // getFilteredPublikasiQuery().
         //
-        // PERBAIKAN: sebelumnya ranking ini HANYA membaca field teks
-        // "afiliasi" itu, padahal di praktiknya field itu nyaris selalu
-        // dikosongkan saat input (termasuk untuk dosen/mahasiswa Universitas
-        // Kebangsaan Republik Indonesia sendiri) - PT-nya sebenarnya sudah
-        // diketahui lewat relasi terstruktur master_perguruan_tinggi_id
-        // (override langsung di baris publikasi_penulis_dosen/mahasiswa, atau
-        // fallback ke PT asal Dosen/Mahasiswa). Karena hanya field teks yang
-        // dibaca, hampir semua baris "tidak terbaca" dan Kontribusi per
-        // Afiliasi selalu tampil kosong meski publikasinya banyak. Sekarang
-        // tiap baris pakai field teks itu KALAU DIISI, baru fallback ke nama
-        // PT lewat relasi terstruktur kalau kosong. Penulis Lain tidak punya
-        // relasi PT sama sekali sehingga tetap murni dari field teks.
-        $demoPtNamaLower = MasterPerguruanTinggi::whereIn('kode_pt', self::DEMO_PT_KODE)
-            ->pluck('nama_pt')
-            ->map(fn($nama) => \Illuminate\Support\Str::lower(trim($nama)))
-            ->all();
-
-        // PERBAIKAN LANJUTAN: fallback di atas ternyata masih belum cukup
-        // untuk dosen/mahasiswa hasil sinkronisasi Master Data API UKRI
-        // (kolom `ukri_id` terisi - lihat App\Console\Commands\SyncUkriMasterData
-        // & catatan panjang di ukriPtId()). Proses sync itu TIDAK PERNAH
-        // mengisi master_perguruan_tinggi_id mereka, jadi mpt_ppd/mpt_dosen/
-        // mpt_mhs di bawah tetap NULL untuk mereka dan baris itu masih
-        // ter-COALESCE jadi NULL - lalu dibuang oleh filter(filled(...)) di
-        // bawah, padahal mereka semua sebenarnya dosen/mahasiswa UKRI
-        // sendiri. Ditambah satu fallback lagi ke nama UKRI kalau ukri_id
-        // terisi, supaya publikasi yang penulisnya "native" UKRI tetap ikut
-        // terhitung sebagai kontribusi UKRI.
-        $ukriNamaPt = optional(MasterPerguruanTinggi::where('kode_pt', self::UKRI_PT_KODE)->first())->nama_pt;
-
-        $afiliasiDosenRows = DB::table('publikasi_penulis_dosen as ppd')
-            ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
-            ->leftJoin('master_perguruan_tinggi as mpt_ppd', 'mpt_ppd.id', '=', 'ppd.master_perguruan_tinggi_id')
-            ->leftJoin('master_perguruan_tinggi as mpt_dosen', 'mpt_dosen.id', '=', 'dosen.master_perguruan_tinggi_id')
-            ->whereIn('ppd.publikasi_id', $filteredIdsQuery)
-            ->where(function ($q) {
-                $q->whereNull('dosen.nidn')->orWhereNotIn('dosen.nidn', self::DEMO_DOSEN_NIDN);
-            })
-            ->selectRaw(
-                "ppd.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppd.afiliasi), ''), mpt_ppd.nama_pt, mpt_dosen.nama_pt, CASE WHEN dosen.ukri_id IS NOT NULL THEN ? END) as afiliasi",
-                [$ukriNamaPt]
-            )
-            ->get();
-
-        $afiliasiMahasiswaRows = DB::table('publikasi_penulis_mahasiswa as ppm')
-            ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
-            ->leftJoin('master_perguruan_tinggi as mpt_mhs', 'mpt_mhs.id', '=', 'mahasiswa.master_perguruan_tinggi_id')
-            ->whereIn('ppm.publikasi_id', $filteredIdsQuery)
-            ->where(function ($q) {
-                $q->whereNull('mahasiswa.nim')->orWhereNotIn('mahasiswa.nim', self::DEMO_MAHASISWA_NIM);
-            })
-            ->selectRaw(
-                "ppm.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppm.afiliasi), ''), mpt_mhs.nama_pt, CASE WHEN mahasiswa.ukri_id IS NOT NULL THEN ? END) as afiliasi",
-                [$ukriNamaPt]
-            )
-            ->get();
-
-        $afiliasiLainRows = DB::table('publikasi_penulis_lain')
-            ->whereIn('publikasi_id', $filteredIdsQuery)
-            ->whereNotNull('afiliasi')
-            ->where('afiliasi', '<>', '')
-            ->select('publikasi_id', 'afiliasi')
-            ->get();
-
-        // Digabung & dikelompokkan di level PHP (bukan groupBy SQL) supaya
-        // variasi spasi/kapitalisasi ("Universitas Kristen" vs "universitas
-        // kristen ") tetap dianggap satu afiliasi yang sama. PT dummy bawaan
-        // seeder ikut dibuang di sini juga (jaga-jaga kalau rownya belum
-        // dihapus dari DB).
-        //
-        // PERBAIKAN: "jumlah" di sini harus dihitung per JURNAL/PUBLIKASI
-        // unik, bukan per baris penulis. Kalau 1 publikasi punya 2 penulis
-        // dengan afiliasi yang sama (mis. 2 penulis UKRI), itu tetap 1
-        // publikasi buat afiliasi UKRI. Tapi kalau 1 publikasi punya 2
-        // afiliasi berbeda (mis. ULBI & UKRI), publikasi itu tetap dihitung
-        // di masing-masing afiliasi (1 untuk ULBI, 1 untuk UKRI). Makanya
-        // di-dedupe dulu per pasangan (publikasi_id, afiliasi) sebelum
-        // dihitung jumlahnya.
-        $topAfiliasi = $afiliasiDosenRows
-            ->concat($afiliasiMahasiswaRows)
-            ->concat($afiliasiLainRows)
-            ->filter(fn($row) => filled($row->afiliasi))
-            ->reject(fn($row) => in_array(\Illuminate\Support\Str::lower(trim($row->afiliasi)), $demoPtNamaLower, true))
-            ->unique(fn($row) => $row->publikasi_id . '|' . \Illuminate\Support\Str::lower(trim($row->afiliasi)))
+        // "jumlah" di sini dihitung per JURNAL/PUBLIKASI unik, bukan per
+        // baris penulis - kalau 1 publikasi punya 2 penulis dengan afiliasi
+        // yang sama (mis. 2 penulis UKRI), itu tetap 1 publikasi buat
+        // afiliasi UKRI. Tapi kalau 1 publikasi punya 2 afiliasi berbeda
+        // (mis. ULBI & UKRI), publikasi itu tetap dihitung di masing-masing
+        // afiliasi (1 untuk ULBI, 1 untuk UKRI) - makanya getAfiliasiRows()
+        // sudah men-dedupe dulu per pasangan (publikasi_id, afiliasi)
+        // sebelum sampai di sini.
+        $topAfiliasi = $this->getAfiliasiRows($filteredIdsQuery)
             ->groupBy(fn($row) => \Illuminate\Support\Str::lower(trim($row->afiliasi)))
             ->map(function ($rows) {
                 return (object) [

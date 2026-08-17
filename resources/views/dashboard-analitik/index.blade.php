@@ -1,5 +1,11 @@
 @extends('layouts.app')
 
+@if(auth()->user()->hasRole('admin'))
+@push('styles')
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+@endpush
+@endif
+
 @section('content')
 
     @php
@@ -36,17 +42,27 @@
                         <input type="date" name="tanggal_sampai" id="filter-tanggal-sampai" class="form-control form-control-sm"
                             value="{{ request('tanggal_sampai') }}">
                     </div>
-                    <div class="col-md-3 col-sm-6">
+                    <div class="col-md-2 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Afiliasi</label>
-                        <select name="perguruan_tinggi_id" id="filter-perguruan-tinggi" class="form-select form-select-sm">
+                        <select name="afiliasi" id="filter-afiliasi" class="form-select form-select-sm">
                             <option value="">-- Semua Afiliasi --</option>
-                            @foreach($perguruanTinggiList as $pt)
-                                <option value="{{ $pt->id }}" {{ request('perguruan_tinggi_id') == $pt->id ? 'selected' : '' }}>
-                                    {{ $pt->nama_pt }}</option>
+                            @foreach($afiliasiList as $nama)
+                                <option value="{{ $nama }}" {{ request('afiliasi') == $nama ? 'selected' : '' }}>
+                                    {{ $nama }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-3 col-sm-6">
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label small fw-bold text-secondary">Program Studi</label>
+                        <select name="prodi_id" id="filter-prodi" class="form-select form-select-sm">
+                            <option value="">-- Semua Prodi --</option>
+                            @foreach($prodiList as $prodi)
+                                <option value="{{ $prodi->id }}" {{ request('prodi_id') == $prodi->id ? 'selected' : '' }}>
+                                    {{ $prodi->nama_prodi }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-sm-6">
                         <label class="form-label small fw-bold text-secondary">Kategori Capaian</label>
                         <select name="kategori_capaian" id="filter-kategori-capaian" class="form-select form-select-sm">
                             <option value="">-- Semua Kategori Capaian --</option>
@@ -61,6 +77,18 @@
                             <option value="Visiting Scientist" {{ request('kategori_capaian') == 'Visiting Scientist' ? 'selected' : '' }}>Visiting Scientist</option>
                         </select>
                     </div>
+                    @if($isAdmin)
+                        <div class="col-md-2 col-sm-6">
+                            <label class="form-label small fw-bold text-secondary">Nama Dosen</label>
+                            <select name="dosen_id" id="filter-nama-dosen" class="form-select form-select-sm">
+                                <option value="">-- Semua Dosen --</option>
+                                @foreach($dosenList as $dsn)
+                                    <option value="{{ $dsn->id }}" {{ request('dosen_id') == $dsn->id ? 'selected' : '' }}>
+                                        {{ $dsn->nama }}{{ $dsn->nidn ? " ({$dsn->nidn})" : '' }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     <div class="col-md-2 col-sm-12 d-flex gap-1">
                         <a href="{{ url()->current() }}" id="filter-reset" class="btn btn-sm btn-outline-secondary flex-fill" title="Reset Filter">
                             <i class="bi bi-arrow-counterclockwise"></i> Reset
@@ -505,6 +533,9 @@
 
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    @if(auth()->user()->hasRole('admin'))
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    @endif
     <script>
         document.addEventListener("DOMContentLoaded", () => {
 
@@ -678,9 +709,24 @@
             const form = document.getElementById('filterForm');
             const inputDari = document.getElementById('filter-tanggal-dari');
             const inputSampai = document.getElementById('filter-tanggal-sampai');
-            const selectPT = document.getElementById('filter-perguruan-tinggi');
+            const selectAfiliasi = document.getElementById('filter-afiliasi');
+            const selectProdi = document.getElementById('filter-prodi');
             const selectCapaian = document.getElementById('filter-kategori-capaian');
+            const selectDosenEl = document.getElementById('filter-nama-dosen'); // hanya ada untuk admin
             const resetLink = document.getElementById('filter-reset');
+
+            // Tom Select untuk Nama Dosen (searchable) - dropdown ini bisa
+            // berisi banyak dosen, jadi dibuat bisa dicari sama seperti pola
+            // yang sudah dipakai di form Publikasi Karya (create/edit.blade.php).
+            let tsDosen = null;
+            if (selectDosenEl) {
+                tsDosen = new TomSelect(selectDosenEl, {
+                    placeholder: 'Cari nama dosen...',
+                    allowEmptyOption: true,
+                    maxOptions: null,
+                    onChange: () => { clearTimeout(debounceTimer); fetchDashboard(); },
+                });
+            }
             let debounceTimer = null;
             let activeController = null; // untuk membatalkan request yang sudah usang
             let requestSeq = 0; // penjaga tambahan: kalau respons lama (usang) telat
@@ -699,8 +745,10 @@
                 const params = new URLSearchParams();
                 if (inputDari.value) params.set('tanggal_dari', inputDari.value);
                 if (inputSampai.value) params.set('tanggal_sampai', inputSampai.value);
-                if (selectPT.value) params.set('perguruan_tinggi_id', selectPT.value);
+                if (selectAfiliasi.value) params.set('afiliasi', selectAfiliasi.value);
+                if (selectProdi.value) params.set('prodi_id', selectProdi.value);
                 if (selectCapaian.value) params.set('kategori_capaian', selectCapaian.value);
+                if (selectDosenEl && selectDosenEl.value) params.set('dosen_id', selectDosenEl.value);
                 return params;
             }
 
@@ -833,7 +881,11 @@
             });
 
             // Select langsung memicu filter begitu dipilih (tanpa perlu klik apapun)
-            selectPT.addEventListener('change', () => {
+            selectAfiliasi.addEventListener('change', () => {
+                clearTimeout(debounceTimer);
+                fetchDashboard();
+            });
+            selectProdi.addEventListener('change', () => {
                 clearTimeout(debounceTimer);
                 fetchDashboard();
             });
@@ -861,8 +913,14 @@
                 e.preventDefault();
                 inputDari.value = '';
                 inputSampai.value = '';
-                selectPT.value = '';
+                selectAfiliasi.value = '';
+                selectProdi.value = '';
                 selectCapaian.value = '';
+                if (tsDosen) {
+                    tsDosen.clear(true); // true = jangan trigger onChange ganda, fetch manual di bawah
+                } else if (selectDosenEl) {
+                    selectDosenEl.value = '';
+                }
                 clearTimeout(debounceTimer);
                 fetchDashboard();
             });

@@ -108,14 +108,24 @@ class PublikasiController extends Controller
             'penulis_dosen.*.urutan' => 'nullable|integer|min:1',
             'penulis_mahasiswa.*.urutan' => 'nullable|integer|min:1',
             'penulis_lain.*.urutan' => 'nullable|integer|min:1',
+            // Validasi file dokumen: tipe & ukuran maksimal wajib dicek di
+            // sini (bukan cuma di JS/tampilan) - sebelumnya field ini sama
+            // sekali tidak divalidasi Laravel, jadi file yang melebihi batas
+            // PHP (upload_max_filesize/post_max_size di server) langsung
+            // "hilang" dari request tanpa pesan error apapun ke user (baris
+            // dokumennya otomatis di-skip di bawah). max:5120 = 5MB, sesuai
+            // keterangan yang sudah ditulis di tampilan form.
+            'dokumen.*.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,txt|max:5120',
         ]);
 
         // Validation Rules:
-        // 1. Minimum 1 document required
+        // 1. Minimum 1 document required (harus benar-benar punya file atau
+        //    tautan - nama saja tidak dianggap dokumen valid, supaya
+        //    konsisten dengan penyimpanan di bawah).
         $hasDoc = false;
         if ($request->has('dokumen') && is_array($request->dokumen)) {
             foreach ($request->dokumen as $index => $doc) {
-                if (!empty($doc['nama_dokumen']) || $request->hasFile("dokumen.{$index}.file") || !empty($doc['tautan_dokumen'])) {
+                if ($request->hasFile("dokumen.{$index}.file") || !empty($doc['tautan_dokumen'])) {
                     $hasDoc = true;
                     break;
                 }
@@ -164,7 +174,10 @@ class PublikasiController extends Controller
             // Save Dokumen
             if ($request->has('dokumen') && is_array($request->dokumen)) {
                 foreach ($request->dokumen as $index => $doc) {
-                    if (empty($doc['nama_dokumen']) && !$request->hasFile("dokumen.{$index}.file") && empty($doc['tautan_dokumen'])) {
+                    // Dokumen wajib punya file ATAU tautan - nama saja tidak
+                    // cukup, supaya tidak ada baris dokumen "kosong" yang
+                    // tidak bisa dibuka/preview di halaman detail.
+                    if (!$request->hasFile("dokumen.{$index}.file") && empty($doc['tautan_dokumen'])) {
                         continue;
                     }
 
@@ -177,6 +190,19 @@ class PublikasiController extends Controller
                         $fileName = $file->getClientOriginalName();
                         $jenisFile = $file->getClientMimeType();
                         $filePath = $file->store('dokumen_publikasi', 'public');
+
+                        // Disk 'public' dikonfigurasi dengan 'throw' => false,
+                        // jadi kalau penulisan file gagal (mis. folder
+                        // storage/app/public tidak writable di server),
+                        // store() balik `false` TANPA melempar exception.
+                        // Kalau dibiarkan, baris dokumen tetap kesimpen ke DB
+                        // dengan nama_file terisi tapi path_file kosong -
+                        // hasilnya dokumen "ada" tapi tidak pernah bisa
+                        // dibuka. Deteksi eksplisit di sini supaya gagal
+                        // total (rollback) dengan pesan yang jelas.
+                        if ($filePath === false) {
+                            throw new \Exception("Gagal menyimpan file dokumen \"{$fileName}\" ke server. Kemungkinan folder storage/app/public di server belum bisa ditulis (masalah permission).");
+                        }
                     }
 
                     PublikasiDokumen::create([
@@ -295,6 +321,14 @@ class PublikasiController extends Controller
             'penulis_dosen.*.urutan' => 'nullable|integer|min:1',
             'penulis_mahasiswa.*.urutan' => 'nullable|integer|min:1',
             'penulis_lain.*.urutan' => 'nullable|integer|min:1',
+            // Validasi file dokumen: tipe & ukuran maksimal wajib dicek di
+            // sini (bukan cuma di JS/tampilan) - sebelumnya field ini sama
+            // sekali tidak divalidasi Laravel, jadi file yang melebihi batas
+            // PHP (upload_max_filesize/post_max_size di server) langsung
+            // "hilang" dari request tanpa pesan error apapun ke user (baris
+            // dokumennya otomatis di-skip di bawah). max:5120 = 5MB, sesuai
+            // keterangan yang sudah ditulis di tampilan form.
+            'dokumen.*.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,txt|max:5120',
         ]);
 
         $dosenAuthors = array_filter($request->input('penulis_dosen', []), fn($item) => !empty($item['dosen_id']));
@@ -333,7 +367,8 @@ class PublikasiController extends Controller
             // Re-sync Dokumen if uploaded
             if ($request->has('dokumen') && is_array($request->dokumen)) {
                 foreach ($request->dokumen as $index => $doc) {
-                    if (empty($doc['nama_dokumen']) && !$request->hasFile("dokumen.{$index}.file") && empty($doc['tautan_dokumen'])) {
+                    // Sama seperti store(): wajib ada file atau tautan.
+                    if (!$request->hasFile("dokumen.{$index}.file") && empty($doc['tautan_dokumen'])) {
                         continue;
                     }
 
@@ -346,6 +381,12 @@ class PublikasiController extends Controller
                         $fileName = $file->getClientOriginalName();
                         $jenisFile = $file->getClientMimeType();
                         $filePath = $file->store('dokumen_publikasi', 'public');
+
+                        // Sama seperti store(): deteksi eksplisit kegagalan
+                        // tulis file (disk 'public' pakai 'throw' => false).
+                        if ($filePath === false) {
+                            throw new \Exception("Gagal menyimpan file dokumen \"{$fileName}\" ke server. Kemungkinan folder storage/app/public di server belum bisa ditulis (masalah permission).");
+                        }
                     }
 
                     PublikasiDokumen::create([

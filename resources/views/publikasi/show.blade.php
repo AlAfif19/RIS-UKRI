@@ -76,8 +76,8 @@
                                 <td>{{ $publikasi->penerbit ?? '-' }}</td>
                             </tr>
                             <tr>
-                                <th class="table-light">DOI / ISSN</th>
-                                <td>DOI: {{ $publikasi->doi ?? '-' }} | ISSN: {{ $publikasi->issn ?? '-' }}</td>
+                                <th class="table-light">DOI / ISSN / ISBN</th>
+                                <td>DOI: {{ $publikasi->doi ?? '-' }} | ISSN / ISBN: {{ $publikasi->issn ?? '-' }}</td>
                             </tr>
                             <tr>
                                 <th class="table-light">Tautan Eksternal</th>
@@ -187,6 +187,17 @@
                                         <td>{{ $doc->tanggal_upload }}</td>
                                         <td>
                                             @if($doc->path_file)
+                                                @php
+                                                    $isPdf = strtolower(pathinfo($doc->path_file, PATHINFO_EXTENSION)) === 'pdf';
+                                                @endphp
+                                                @if($isPdf)
+                                                    <button type="button" class="btn btn-sm btn-outline-primary"
+                                                        data-bs-toggle="modal" data-bs-target="#previewDokumenModal"
+                                                        data-file-url="{{ asset('storage/' . $doc->path_file) }}"
+                                                        data-file-name="{{ $doc->nama_dokumen }}">
+                                                        <i class="bi bi-eye"></i> Lihat
+                                                    </button>
+                                                @endif
                                                 <a href="{{ asset('storage/' . $doc->path_file) }}" target="_blank" class="btn btn-sm btn-outline-primary">
                                                     <i class="bi bi-download"></i> Unduh File
                                                 </a>
@@ -213,4 +224,54 @@
     </div>
 </section>
 
+{{-- Modal Preview Dokumen (PDF) --}}
+<div class="modal fade" id="previewDokumenModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content" style="height: 85vh;">
+            <div class="modal-header py-2">
+                <h6 class="modal-title mb-0" id="previewDokumenModalLabel">
+                    <i class="bi bi-file-earmark-pdf text-danger"></i> <span id="previewDokumenNama"></span>
+                </h6>
+                <a href="#" id="previewDokumenBukaTab" target="_blank" class="btn btn-sm btn-outline-primary ms-auto me-2">
+                    <i class="bi bi-box-arrow-up-right"></i> Buka di tab baru
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="previewDokumenIframe" src="" style="width: 100%; height: 100%; border: 0;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const modalEl = document.getElementById('previewDokumenModal');
+        if (!modalEl) return;
+
+        const iframe = document.getElementById('previewDokumenIframe');
+        const namaEl = document.getElementById('previewDokumenNama');
+        const bukaTabBtn = document.getElementById('previewDokumenBukaTab');
+
+        modalEl.addEventListener('show.bs.modal', function (event) {
+            const trigger = event.relatedTarget;
+            if (!trigger) return;
+
+            const url = trigger.getAttribute('data-file-url');
+            const nama = trigger.getAttribute('data-file-name');
+
+            iframe.src = url;
+            namaEl.textContent = nama || 'Dokumen';
+            bukaTabBtn.href = url;
+        });
+
+        // Hentikan load PDF saat modal ditutup, biar tidak tetap jalan di background.
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            iframe.src = '';
+        });
+    })();
+</script>
+@endpush
