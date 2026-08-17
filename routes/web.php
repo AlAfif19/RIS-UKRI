@@ -111,6 +111,8 @@ Route::middleware(['auth', 'role:admin|dosen'])->group(function () {
     Route::get('/api/mahasiswa/search', [PublikasiController::class, 'apiSearchMahasiswa'])->name('api.mahasiswa.search');
     Route::get('/api/mahasiswa/all', [PublikasiController::class, 'apiAllMahasiswa'])->name('api.mahasiswa.all');
     Route::get('/api/jurnal/all', [PublikasiController::class, 'apiAllJurnal'])->name('api.jurnal.all');
+    Route::get('/api/penerbit/all', [PublikasiController::class, 'apiAllPenerbit'])->name('api.penerbit.all');
+    Route::get('/api/penulis-lain/all', [PublikasiController::class, 'apiAllPenulisLain'])->name('api.penulis-lain.all');
     Route::get('/api/publikasi/cek-judul', [PublikasiController::class, 'apiSearchJudul'])->name('api.publikasi.cek-judul');
 
     // Dashboard Analitik — bisa diakses admin maupun dosen. Datanya sendiri

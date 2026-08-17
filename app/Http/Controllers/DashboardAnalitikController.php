@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\MasterPerguruanTinggi;
 use App\Models\MasterAktivitasLitabmas;
+use App\Models\Dosen;
+use App\Models\Mahasiswa;
 
 class DashboardAnalitikController extends Controller
 {
@@ -97,10 +99,66 @@ class DashboardAnalitikController extends Controller
         return $this->ukriPtIdCache;
     }
 
+    /**
+     * ID dosen (dan mahasiswa, untuk jaga-jaga akun dengan email yang sama
+     * juga tercatat sebagai mahasiswa) milik user yang sedang login, dipakai
+     * untuk membatasi seluruh angka dashboard supaya dosen hanya melihat
+     * datanya sendiri.
+     *
+     * Konsisten dengan PublikasiController::index()/checkAccess(): dosen_id
+     * yang sudah ditautkan saat login (SSO/dev-login) diprioritaskan,
+     * fallback ke pencarian by email HANYA kalau dosen_id kosong.
+     *
+     * Return null kalau user adalah admin (artinya: tidak perlu dibatasi,
+     * lihat seluruh data).
+     */
+    private function currentAuthorIds(): ?array
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->hasRole('admin')) {
+            return null;
+        }
+
+        $userEmail = $user->email;
+        $dosenIds = filled($user->dosen_id)
+            ? [$user->dosen_id]
+            : Dosen::where('email', $userEmail)->pluck('id')->toArray();
+        $mahasiswaIds = Mahasiswa::where('email', $userEmail)->pluck('id')->toArray();
+
+        return ['dosen' => $dosenIds, 'mahasiswa' => $mahasiswaIds];
+    }
+
     private function getFilteredPublikasiQuery(Request $request)
     {
         $query = DB::table('publikasi')
             ->whereNotIn('judul', self::DEMO_PUBLIKASI_TITLES);
+
+        // PERBAIKAN: sebelumnya dosen non-admin tetap melihat dashboard
+        // menyeluruh (seluruh publikasi, semua dosen) karena tidak ada
+        // pembatasan sama sekali di sini - beda dengan PublikasiController
+        // yang memang sudah membatasi. Sekarang publikasi yang masuk hitungan
+        // dibatasi hanya yang dosen (atau mahasiswa, dengan email yang sama)
+        // login ini tercantum sebagai penulisnya.
+        $authorIds = $this->currentAuthorIds();
+        if ($authorIds !== null) {
+            $dosenIds = $authorIds['dosen'];
+            $mahasiswaIds = $authorIds['mahasiswa'];
+
+            $query->where(function ($q) use ($dosenIds, $mahasiswaIds) {
+                $q->whereExists(function ($sq) use ($dosenIds) {
+                    $sq->select(DB::raw(1))
+                        ->from('publikasi_penulis_dosen as ppd')
+                        ->whereColumn('ppd.publikasi_id', 'publikasi.id')
+                        ->whereIn('ppd.dosen_id', $dosenIds);
+                })->orWhereExists(function ($sq) use ($mahasiswaIds) {
+                    $sq->select(DB::raw(1))
+                        ->from('publikasi_penulis_mahasiswa as ppm')
+                        ->whereColumn('ppm.publikasi_id', 'publikasi.id')
+                        ->whereIn('ppm.mahasiswa_id', $mahasiswaIds);
+                });
+            });
+        }
 
         if ($request->filled('tanggal_dari')) {
             $query->where('tanggal_terbit', '>=', $request->tanggal_dari);
@@ -213,13 +271,20 @@ class DashboardAnalitikController extends Controller
             return response()->json($data);
         }
 
+        // Dosen non-admin hanya perlu memilih di antara PT yang benar-benar
+        // muncul di publikasinya sendiri (lihat currentAuthorIds() /
+        // getFilteredPublikasiQuery()) - bukan PT dari publikasi dosen lain.
+        $filteredIdsForDropdown = $this->getFilteredPublikasiQuery($request)->select('id');
+
         $usedPtIds = DB::table('publikasi_penulis_dosen as ppd')
             ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+            ->whereIn('ppd.publikasi_id', $filteredIdsForDropdown)
             ->whereRaw('COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) IS NOT NULL')
             ->select(DB::raw('DISTINCT COALESCE(ppd.master_perguruan_tinggi_id, dosen.master_perguruan_tinggi_id) as pt_id'))
             ->union(
                 DB::table('publikasi_penulis_mahasiswa as ppm')
                     ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+                    ->whereIn('ppm.publikasi_id', $filteredIdsForDropdown)
                     ->whereNotNull('mahasiswa.master_perguruan_tinggi_id')
                     ->select(DB::raw('DISTINCT mahasiswa.master_perguruan_tinggi_id as pt_id'))
             );
@@ -228,15 +293,18 @@ class DashboardAnalitikController extends Controller
         // memang punya publikasi (lihat catatan panjang di ukriPtId()) -
         // dosen/mahasiswa native UKRI (ukri_id terisi) sering tidak punya
         // master_perguruan_tinggi_id sama sekali, jadi tidak selalu ikut
-        // ter-detect lewat $usedPtIds di atas.
+        // ter-detect lewat $usedPtIds di atas. Untuk dosen non-admin, tetap
+        // dibatasi ke publikasi miliknya sendiri (whereIn publikasi_id).
         $ukriPtId = $this->ukriPtId();
         $ukriPunyaKontribusi = $ukriPtId !== null && (
             DB::table('publikasi_penulis_dosen as ppd')
                 ->leftJoin('dosen', 'dosen.id', '=', 'ppd.dosen_id')
+                ->whereIn('ppd.publikasi_id', $filteredIdsForDropdown)
                 ->whereNotNull('dosen.ukri_id')
                 ->exists()
             || DB::table('publikasi_penulis_mahasiswa as ppm')
                 ->leftJoin('mahasiswa', 'mahasiswa.id', '=', 'ppm.mahasiswa_id')
+                ->whereIn('ppm.publikasi_id', $filteredIdsForDropdown)
                 ->whereNotNull('mahasiswa.ukri_id')
                 ->exists()
         );
@@ -476,7 +544,7 @@ class DashboardAnalitikController extends Controller
                 $q->whereNull('dosen.nidn')->orWhereNotIn('dosen.nidn', self::DEMO_DOSEN_NIDN);
             })
             ->selectRaw(
-                "COALESCE(NULLIF(TRIM(ppd.afiliasi), ''), mpt_ppd.nama_pt, mpt_dosen.nama_pt, CASE WHEN dosen.ukri_id IS NOT NULL THEN ? END) as afiliasi",
+                "ppd.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppd.afiliasi), ''), mpt_ppd.nama_pt, mpt_dosen.nama_pt, CASE WHEN dosen.ukri_id IS NOT NULL THEN ? END) as afiliasi",
                 [$ukriNamaPt]
             )
             ->get();
@@ -489,7 +557,7 @@ class DashboardAnalitikController extends Controller
                 $q->whereNull('mahasiswa.nim')->orWhereNotIn('mahasiswa.nim', self::DEMO_MAHASISWA_NIM);
             })
             ->selectRaw(
-                "COALESCE(NULLIF(TRIM(ppm.afiliasi), ''), mpt_mhs.nama_pt, CASE WHEN mahasiswa.ukri_id IS NOT NULL THEN ? END) as afiliasi",
+                "ppm.publikasi_id as publikasi_id, COALESCE(NULLIF(TRIM(ppm.afiliasi), ''), mpt_mhs.nama_pt, CASE WHEN mahasiswa.ukri_id IS NOT NULL THEN ? END) as afiliasi",
                 [$ukriNamaPt]
             )
             ->get();
@@ -498,7 +566,7 @@ class DashboardAnalitikController extends Controller
             ->whereIn('publikasi_id', $filteredIdsQuery)
             ->whereNotNull('afiliasi')
             ->where('afiliasi', '<>', '')
-            ->select('afiliasi')
+            ->select('publikasi_id', 'afiliasi')
             ->get();
 
         // Digabung & dikelompokkan di level PHP (bukan groupBy SQL) supaya
@@ -506,11 +574,21 @@ class DashboardAnalitikController extends Controller
         // kristen ") tetap dianggap satu afiliasi yang sama. PT dummy bawaan
         // seeder ikut dibuang di sini juga (jaga-jaga kalau rownya belum
         // dihapus dari DB).
+        //
+        // PERBAIKAN: "jumlah" di sini harus dihitung per JURNAL/PUBLIKASI
+        // unik, bukan per baris penulis. Kalau 1 publikasi punya 2 penulis
+        // dengan afiliasi yang sama (mis. 2 penulis UKRI), itu tetap 1
+        // publikasi buat afiliasi UKRI. Tapi kalau 1 publikasi punya 2
+        // afiliasi berbeda (mis. ULBI & UKRI), publikasi itu tetap dihitung
+        // di masing-masing afiliasi (1 untuk ULBI, 1 untuk UKRI). Makanya
+        // di-dedupe dulu per pasangan (publikasi_id, afiliasi) sebelum
+        // dihitung jumlahnya.
         $topAfiliasi = $afiliasiDosenRows
             ->concat($afiliasiMahasiswaRows)
             ->concat($afiliasiLainRows)
             ->filter(fn($row) => filled($row->afiliasi))
             ->reject(fn($row) => in_array(\Illuminate\Support\Str::lower(trim($row->afiliasi)), $demoPtNamaLower, true))
+            ->unique(fn($row) => $row->publikasi_id . '|' . \Illuminate\Support\Str::lower(trim($row->afiliasi)))
             ->groupBy(fn($row) => \Illuminate\Support\Str::lower(trim($row->afiliasi)))
             ->map(function ($rows) {
                 return (object) [

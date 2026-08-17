@@ -212,6 +212,8 @@
 <script src="/assets/vendor/echarts/echarts.min.js"></script>
 <script src="/assets/vendor/simple-datatables/simple-datatables.js"></script>
 
+@include('partials.notify')
+
 <script src="/assets/js/main.js"></script>
 
 @stack('scripts')

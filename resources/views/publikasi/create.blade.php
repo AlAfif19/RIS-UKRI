@@ -107,6 +107,27 @@
                     </div>
                 @endif
 
+                <!-- PERBAIKAN: sebelumnya kalau validasi gagal (mis. lupa
+                     tambah dokumen/penulis/corresponding author), form
+                     dikirim ke server dulu baru redirect-back dengan error -
+                     itu artinya HALAMAN REFRESH dan SEMUA baris dinamis yang
+                     sudah diisi (tabel dokumen, penulis dosen/mahasiswa/lain)
+                     ikut hilang karena baris-baris itu murni hasil JS, tidak
+                     ada logic untuk membangun ulang dari old() input kalau
+                     gagal. Sekarang field-field wajib dicek dulu di
+                     JavaScript SEBELUM form benar-benar dikirim (lihat
+                     validateFormPublikasi() di bagian scripts) - kalau ada
+                     yang belum lengkap, submit dibatalkan (tidak ada request
+                     ke server sama sekali, jadi tidak ada refresh), pesannya
+                     ditampilkan di sini, dan tombol Simpan di-disable sampai
+                     bagian yang kurang itu dilengkapi. -->
+                <div id="clientValidationErrors" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>Lengkapi dulu bagian yang wajib diisi:</strong>
+                    <ul class="mb-0 mt-1" id="clientValidationErrorsList"></ul>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+
                 <form action="{{ route('publikasi.store') }}" method="POST" enctype="multipart/form-data"
                     id="formPublikasi">
                     @csrf
@@ -404,7 +425,7 @@
                     </div>
 
                     <!-- CARD 2: Upload Dokumen -->
-                    <div class="card mb-4">
+                    <div class="card mb-4" id="cardDokumen">
                         <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
                             <span><i class="bi bi-file-earmark-pdf me-1"></i> Upload Dokumen <span
                                     class="text-danger">*</span></span>
@@ -487,7 +508,7 @@
                     </div>
 
                     <!-- CARD 3: Penulis Dosen -->
-                    <div class="card mb-4">
+                    <div class="card mb-4" id="cardPenulisDosen">
                         <div class="card-header bg-light fw-bold">
                             <i class="bi bi-person-badge me-1"></i> Penulis Dosen
                         </div>
@@ -588,7 +609,7 @@
                             <a href="{{ route('publikasi.index') }}" class="btn btn-secondary">
                                 <i class="bi bi-arrow-left"></i> Batal
                             </a>
-                            <button type="submit" class="btn btn-primary px-4 py-2 fw-bold">
+                            <button type="submit" id="btnSubmitPublikasi" class="btn btn-primary px-4 py-2 fw-bold">
                                 <i class="bi bi-save me-1"></i> Simpan Publikasi Karya
                             </button>
                         </div>
@@ -759,6 +780,179 @@
 
         initJurnalSelect(document.getElementById('nama_jurnal'));
 
+        // Auto-fill baris pertama Penulis Dosen dengan data dosen yang
+        // sedang login (kalau memang login sebagai Dosen, bukan admin -
+        // lihat $loggedDosen di PublikasiController::create()). Baris yang
+        // ditambahkan tetap baris NORMAL: field-nya tetap bisa diganti ke
+        // dosen lain lewat dropdown, urutan/afiliasi/peran tetap bisa
+        // diedit, dan baris ini tetap bisa dihapus lewat tombol hapus biasa
+        // - bedanya cuma nilai AWAL-nya sudah keisi otomatis.
+        const loggedDosen = @json($loggedDosen ?? null);
+
+        function initDosenLoginAutofill() {
+            if (!loggedDosen || !loggedDosen.id) return;
+
+            addPenulisDosenRow();
+
+            const row = document.querySelector('#containerPenulisDosen tr:last-child');
+            if (!row) return;
+
+            const selectEl = row.querySelector('.dosen-select');
+            if (!selectEl) return;
+
+            const label = loggedDosen.nidn + ' - ' + loggedDosen.nama +
+                (loggedDosen.prodi ? ' (' + loggedDosen.prodi + ')' : '');
+
+            loadAllDosenOptions().then(() => {
+                const ts = selectEl.tomselect;
+                if (!ts) return;
+                // Pastikan opsinya ada (harusnya sudah ada dari daftar
+                // semua dosen, tapi ditambahkan lagi jaga-jaga supaya tetap
+                // terisi walau kebetulan belum sempat ke-load) lalu pilih.
+                ts.addOption({ value: String(loggedDosen.id), text: label });
+                ts.refreshOptions(false);
+                ts.setValue(String(loggedDosen.id), true);
+            });
+        }
+
+        // Dipanggil lewat setTimeout(..., 0) supaya baru jalan SETELAH
+        // seluruh script di halaman ini selesai dieksekusi sekali (termasuk
+        // deklarasi pernahCobaSubmit & fungsi revalidateAfterChange di
+        // bagian bawah, yang dipakai juga oleh addPenulisDosenRow()) -
+        // tanpa ini, pemanggilan langsung di sini akan error karena
+        // pernahCobaSubmit belum sempat terdeklarasi.
+        setTimeout(initDosenLoginAutofill, 0);
+
+        // Penerbit/Penyelenggara - pola sama persis dengan Nama Jurnal di
+        // atas: daftar semua penerbit yang PERNAH dientri dimuat sekali,
+        // lalu Tom Select mempersempit dropdown sesuai ketikan (kalau
+        // ketikan cocok dengan yang sudah pernah ada, tinggal pilih -
+        // menghindari data ganda beda kapitalisasi/spasi); kalau belum
+        // pernah ada sama sekali, create:true tetap mengizinkan diketik
+        // bebas sebagai penerbit baru.
+        let penerbitOptionsPromise = null;
+
+        function loadAllPenerbitOptions() {
+            if (!penerbitOptionsPromise) {
+                penerbitOptionsPromise = fetch(`{{ route('api.penerbit.all') }}`)
+                    .then((r) => r.json())
+                    .then((data) => data.map((nama) => ({ value: nama, text: nama })))
+                    .catch(() => []);
+            }
+            return penerbitOptionsPromise;
+        }
+
+        function initPenerbitSelect(inputEl) {
+            if (!inputEl || inputEl.tomselect) return;
+            const ts = new TomSelect(inputEl, {
+                valueField: 'value',
+                labelField: 'text',
+                searchField: ['text'],
+                create: true,
+                createOnBlur: true,
+                persist: false,
+                maxItems: 1,
+                maxOptions: 100,
+                dropdownParent: 'body',
+                render: {
+                    option_create: function (data, escape) {
+                        return `<div class="create">Belum ada yang mirip - pakai sebagai penerbit baru: <strong>"${escape(data.input)}"</strong></div>`;
+                    },
+                    no_results: function (data, escape) {
+                        return `<div class="no-results">Tidak ada penerbit tersimpan yang mirip "${escape(data.input)}"</div>`;
+                    },
+                },
+            });
+
+            loadAllPenerbitOptions().then((options) => {
+                ts.addOptions(options);
+                ts.refreshOptions(false);
+            });
+        }
+
+        initPenerbitSelect(document.getElementById('penerbit'));
+
+        // ISSN - diformat otomatis jadi xxxx-xxxx sambil mengetik: begitu
+        // karakter ke-5 diketik, dash disisipkan otomatis sebelum karakter
+        // itu (jadi "1234" -> ketik "5" -> otomatis jadi "1234-5"). Huruf
+        // "X"/"x" tetap diperbolehkan (dipakai di ISSN sebagai check digit)
+        // dan otomatis di-uppercase; total 8 karakter (belum termasuk dash).
+        (function () {
+            const issnInput = document.getElementById('issn');
+            if (!issnInput) return;
+            issnInput.setAttribute('maxlength', 9);
+            issnInput.addEventListener('input', function () {
+                let raw = issnInput.value.toUpperCase().replace(/[^0-9X]/g, '').slice(0, 8);
+                issnInput.value = raw.length > 4 ? raw.slice(0, 4) + '-' + raw.slice(4) : raw;
+            });
+        })();
+
+        // Nama Kolaborator (Penulis Lain) - pola sama persis dengan Nama
+        // Jurnal di atas: dropdown autocomplete dari nama-nama yang pernah
+        // diinput sebelumnya (lintas SEMUA publikasi, tidak dibatasi per
+        // dosen), tapi tetap boleh mengetik nama baru kalau memang belum
+        // pernah ada (create:true). Bedanya, field ini dirender ulang tiap
+        // kali baris baru ditambahkan lewat addPenulisLainRow() - jadi
+        // initPenulisLainSelect() dipanggil di situ, bukan sekali saat
+        // halaman dibuka.
+        let penulisLainOptionsPromise = null;
+
+        function loadAllPenulisLainOptions() {
+            if (!penulisLainOptionsPromise) {
+                penulisLainOptionsPromise = fetch(`{{ route('api.penulis-lain.all') }}`)
+                    .then((r) => r.json())
+                    .then((data) => data.map((row) => ({
+                        value: row.nama,
+                        text: row.nama,
+                        afiliasi: row.afiliasi,
+                    })))
+                    .catch(() => []);
+            }
+            return penulisLainOptionsPromise;
+        }
+
+        function initPenulisLainSelect(inputEl) {
+            if (!inputEl || inputEl.tomselect) return;
+            const ts = new TomSelect(inputEl, {
+                valueField: 'value',
+                labelField: 'text',
+                searchField: ['text'],
+                create: true,
+                createOnBlur: true,
+                persist: false,
+                maxItems: 1,
+                maxOptions: 100,
+                dropdownParent: 'body',
+                render: {
+                    option_create: function (data, escape) {
+                        return `<div class="create">Belum pernah ada - pakai sebagai kolaborator baru: <strong>"${escape(data.input)}"</strong></div>`;
+                    },
+                    no_results: function (data, escape) {
+                        return `<div class="no-results">Tidak ada kolaborator tersimpan yang mirip "${escape(data.input)}"</div>`;
+                    },
+                },
+                onItemAdd: function (value) {
+                    // Kalau yang dipilih adalah kolaborator LAMA (bukan hasil
+                    // ketik nama baru), isikan otomatis Afiliasi di baris
+                    // yang sama dari data terakhir kali dia diinput - tapi
+                    // cuma kalau field Afiliasi baris itu masih kosong,
+                    // supaya tidak menimpa yang sudah sengaja diisi manual.
+                    const opt = ts.options[value];
+                    if (!opt || !opt.afiliasi) return;
+                    const row = inputEl.closest('tr');
+                    const afiliasiInput = row ? row.querySelector('input[name*="[afiliasi]"]') : null;
+                    if (afiliasiInput && !afiliasiInput.value.trim()) {
+                        afiliasiInput.value = opt.afiliasi;
+                    }
+                },
+            });
+
+            loadAllPenulisLainOptions().then((options) => {
+                ts.addOptions(options);
+                ts.refreshOptions(false);
+            });
+        }
+
         // Escape HTML string
         function escapeHtml(text) {
             if (!text) return '';
@@ -797,11 +991,11 @@
             const file = fileInput.files[0];
 
             if (!name) {
-                alert('Nama dokumen wajib diisi!');
+                appNotify('warning', 'Nama dokumen wajib diisi!', 'Validasi Dokumen');
                 return;
             }
             if (!file && !link) {
-                alert('Wajib memilih file untuk diupload atau memasukkan tautan dokumen!');
+                appNotify('warning', 'Wajib memilih file untuk diupload atau memasukkan tautan dokumen!', 'Validasi Dokumen');
                 return;
             }
 
@@ -878,11 +1072,13 @@
             fileInput.value = '';
 
             updateDocNumbers();
+            revalidateAfterChange();
         }
 
         function removeUploadedDocRow(btn) {
             btn.closest('tr').remove();
             updateDocNumbers();
+            revalidateAfterChange();
         }
 
         function updateDocNumbers() {
@@ -940,6 +1136,7 @@
             `;
             container.appendChild(row);
             initDosenSelect(row.querySelector('.dosen-select'));
+            revalidateAfterChange();
         }
 
         // 4. Penulis Mahasiswa Rows
@@ -981,6 +1178,7 @@
             `;
             container.appendChild(row);
             initMahasiswaSelect(row.querySelector('.mahasiswa-select'));
+            revalidateAfterChange();
         }
 
         // 5. Penulis Lain Rows
@@ -991,7 +1189,7 @@
             const nextIdx = lainCount++;
             row.innerHTML = `
                 <td>
-                    <input type="text" name="penulis_lain[${nextIdx}][nama]" class="form-control form-control-sm table-editable-cell" placeholder="Nama Lengkap Kolaborator" required>
+                    <input type="text" name="penulis_lain[${nextIdx}][nama]" id="penulis_lain_nama_${nextIdx}" class="form-control form-control-sm table-editable-cell penulis-lain-nama-select" placeholder="Nama Lengkap Kolaborator" required>
                 </td>
                 <td>
                     <input type="number" name="penulis_lain[${nextIdx}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="${container.children.length + 1}">
@@ -1019,12 +1217,15 @@
                 </td>
             `;
             container.appendChild(row);
+            initPenulisLainSelect(row.querySelector('.penulis-lain-nama-select'));
+            revalidateAfterChange();
         }
 
         function removeRow(btn) {
             const tbody = btn.closest('tbody');
             btn.closest('tr').remove();
             reorderUrutan(tbody);
+            revalidateAfterChange();
         }
 
         // Row reordering functions
@@ -1172,5 +1373,155 @@
                 setTimeout(hide, 150);
             });
         })();
+
+        // ------------------------------------------------------------------
+        // Validasi wajib-isi di sisi browser (mirror dari aturan di
+        // PublikasiController@store) SEBELUM form dikirim ke server.
+        //
+        // Kenapa: form ini murni JS untuk baris dinamisnya (dokumen, penulis
+        // dosen/mahasiswa/lain) - tidak ada logic untuk membangun ulang
+        // baris-baris itu dari old() kalau request ditolak validasi server.
+        // Jadi kalau submit tetap dikirim ke server lalu server yang
+        // menolak, halaman refresh dan SEMUA baris yang sudah diisi user
+        // (termasuk file yang sudah dipilih untuk diupload) hilang - user
+        // harus mengulang dari nol. Dengan mengecek dulu di browser, submit
+        // yang jelas-jelas belum lengkap dibatalkan SEBELUM sempat mengirim
+        // apapun ke server (tidak ada request, tidak ada refresh), baris
+        // yang sudah diisi tetap utuh, dan tombol Simpan otomatis
+        // di-nonaktifkan sampai bagian yang kurang itu dilengkapi.
+        // ------------------------------------------------------------------
+        const formPublikasi = document.getElementById('formPublikasi');
+        const btnSubmitPublikasi = document.getElementById('btnSubmitPublikasi');
+        let pernahCobaSubmit = false;
+
+        function cekFieldWajib() {
+            const daftarKurang = [];
+
+            const kategori = document.getElementById('kategori_kegiatan');
+            if (kategori && !kategori.value) {
+                daftarKurang.push({ pesan: 'Kategori Kegiatan wajib dipilih.', el: kategori });
+            }
+
+            const judul = document.getElementById('judul');
+            if (judul && !judul.value.trim()) {
+                daftarKurang.push({ pesan: 'Judul Artikel wajib diisi.', el: judul });
+            }
+
+            const tanggal = document.getElementById('tanggal_terbit');
+            if (tanggal && !tanggal.value) {
+                daftarKurang.push({ pesan: 'Tanggal Terbit wajib diisi.', el: tanggal });
+            }
+
+            // Minimal 1 dokumen sudah ditambahkan ke tabel (baris placeholder
+            // "Belum ada dokumen..." tidak dihitung).
+            const jumlahDokumen = document.querySelectorAll('#containerDokumen tr.row-dokumen-item').length;
+            if (jumlahDokumen === 0) {
+                daftarKurang.push({
+                    pesan: 'Minimal 1 dokumen wajib ditambahkan ke tabel dokumen (klik "Tambahkan ke Tabel" setelah mengisi form di atasnya).',
+                    card: document.getElementById('cardDokumen'),
+                });
+            }
+
+            // Minimal 1 penulis dari Dosen ATAU Mahasiswa (sama seperti
+            // aturan server - Penulis Lain saja tidak cukup).
+            const dosenTerpilih = Array.from(document.querySelectorAll('#containerPenulisDosen .dosen-select'))
+                .some((s) => s.value);
+            const mahasiswaTerpilih = Array.from(document.querySelectorAll('#containerPenulisMahasiswa .mahasiswa-select'))
+                .some((s) => s.value);
+            if (!dosenTerpilih && !mahasiswaTerpilih) {
+                daftarKurang.push({
+                    pesan: 'Minimal 1 Penulis Dosen atau Penulis Mahasiswa wajib dipilih.',
+                    card: document.getElementById('cardPenulisDosen'),
+                });
+            }
+
+            // Wajib ada 1 Corresponding Author (radio di salah satu baris
+            // penulis - dosen, mahasiswa, atau lain).
+            const adaCorresponding = !!document.querySelector('input[name="corresponding_author"]:checked');
+            if (!adaCorresponding) {
+                daftarKurang.push({ pesan: 'Wajib memilih 1 Corresponding Author pada salah satu baris penulis.' });
+            }
+
+            return daftarKurang;
+        }
+
+        function bersihkanTandaError() {
+            document.querySelectorAll('#formPublikasi .is-invalid').forEach((el) => el.classList.remove('is-invalid'));
+            document.querySelectorAll('#formPublikasi .border-danger').forEach((el) => el.classList.remove('border-danger'));
+        }
+
+        function tampilkanFieldWajib(daftarKurang) {
+            const box = document.getElementById('clientValidationErrors');
+            const list = document.getElementById('clientValidationErrorsList');
+
+            if (daftarKurang.length === 0) {
+                box.classList.add('d-none');
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = daftarKurang.map((item) => `<li>${escapeHtml(item.pesan)}</li>`).join('');
+            box.classList.remove('d-none');
+
+            daftarKurang.forEach((item) => {
+                if (item.el) item.el.classList.add('is-invalid');
+                if (item.card) item.card.classList.add('border-danger');
+            });
+
+            box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Dipanggil ulang tiap ada perubahan (tambah/hapus baris dokumen
+        // atau penulis) - TAPI hanya benar-benar mengecek & menahan tombol
+        // kalau user sudah pernah mencoba submit sekali. Sebelum submit
+        // pertama, tombol tetap aktif seperti biasa supaya tidak terkesan
+        // "macet" tanpa penjelasan begitu halaman pertama dibuka.
+        function revalidateAfterChange() {
+            if (!pernahCobaSubmit) return;
+            bersihkanTandaError();
+            const daftarKurang = cekFieldWajib();
+            tampilkanFieldWajib(daftarKurang);
+            if (btnSubmitPublikasi) btnSubmitPublikasi.disabled = daftarKurang.length > 0;
+        }
+
+        if (formPublikasi && btnSubmitPublikasi) {
+            formPublikasi.addEventListener('submit', function (e) {
+                pernahCobaSubmit = true;
+                bersihkanTandaError();
+                const daftarKurang = cekFieldWajib();
+
+                if (daftarKurang.length > 0) {
+                    // Batalkan submit SEBELUM sempat mengirim apapun ke
+                    // server - jadi tidak ada request, tidak ada refresh,
+                    // dan seluruh baris dokumen/penulis yang sudah diisi
+                    // user tetap ada persis seperti sebelumnya.
+                    e.preventDefault();
+                    tampilkanFieldWajib(daftarKurang);
+                    btnSubmitPublikasi.disabled = true;
+                    return false;
+                }
+
+                // Lolos validasi browser - tombol di-nonaktifkan supaya
+                // tidak ke-klik dobel selagi request beneran (termasuk
+                // upload file) masih berjalan ke server.
+                btnSubmitPublikasi.disabled = true;
+                btnSubmitPublikasi.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
+            });
+
+            // Field-field sederhana ini cukup didengarkan langsung supaya
+            // tombol bisa langsung ter-enable lagi begitu diisi, tanpa perlu
+            // menunggu ada perubahan baris dokumen/penulis.
+            ['kategori_kegiatan', 'judul', 'tanggal_terbit'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', revalidateAfterChange);
+                if (el) el.addEventListener('change', revalidateAfterChange);
+            });
+
+            // Delegasi di level form supaya baris yang ditambahkan belakangan
+            // (dokumen, penulis dosen/mahasiswa/lain, radio corresponding
+            // author) otomatis ikut kepantau tanpa perlu daftar listener
+            // satu-satu per baris.
+            formPublikasi.addEventListener('change', revalidateAfterChange);
+        }
     </script>
 @endpush

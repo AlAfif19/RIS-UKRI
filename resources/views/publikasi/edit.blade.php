@@ -757,10 +757,73 @@
         });
     }
 
+    // Penerbit/Penyelenggara - pola sama persis dengan Nama Jurnal di atas:
+    // daftar semua penerbit yang PERNAH dientri dimuat sekali, lalu Tom
+    // Select mempersempit dropdown sesuai ketikan; nilai yang sudah
+    // tersimpan sebelumnya di publikasi ini tetap dipertahankan sebagai item
+    // terpilih walau kebetulan tidak ada di daftar.
+    let penerbitOptionsPromise = null;
+
+    function loadAllPenerbitOptions() {
+        if (!penerbitOptionsPromise) {
+            penerbitOptionsPromise = fetch(`{{ route('api.penerbit.all') }}`)
+                .then((r) => r.json())
+                .then((data) => data.map((nama) => ({ value: nama, text: nama })))
+                .catch(() => []);
+        }
+        return penerbitOptionsPromise;
+    }
+
+    function initPenerbitSelect(inputEl) {
+        if (!inputEl || inputEl.tomselect) return;
+        const initialValue = inputEl.value;
+        const ts = new TomSelect(inputEl, {
+            valueField: 'value',
+            labelField: 'text',
+            searchField: ['text'],
+            create: true,
+            createOnBlur: true,
+            persist: false,
+            maxItems: 1,
+            maxOptions: 100,
+            dropdownParent: 'body',
+            render: {
+                option_create: function (data, escape) {
+                    return `<div class="create">Belum ada yang mirip - pakai sebagai penerbit baru: <strong>"${escape(data.input)}"</strong></div>`;
+                },
+                no_results: function (data, escape) {
+                    return `<div class="no-results">Tidak ada penerbit tersimpan yang mirip "${escape(data.input)}"</div>`;
+                },
+            },
+        });
+
+        loadAllPenerbitOptions().then((options) => {
+            ts.addOptions(options);
+            ts.refreshOptions(false);
+            if (initialValue) {
+                ts.addOption({ value: initialValue, text: initialValue });
+                ts.setValue(initialValue, true);
+            }
+        });
+    }
+
+    // ISSN - diformat otomatis jadi xxxx-xxxx sambil mengetik, pola sama
+    // dengan create.blade.php.
+    (function () {
+        const issnInput = document.getElementById('issn');
+        if (!issnInput) return;
+        issnInput.setAttribute('maxlength', 9);
+        issnInput.addEventListener('input', function () {
+            let raw = issnInput.value.toUpperCase().replace(/[^0-9X]/g, '').slice(0, 8);
+            issnInput.value = raw.length > 4 ? raw.slice(0, 4) + '-' + raw.slice(4) : raw;
+        });
+    })();
+
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('#containerPenulisDosen .dosen-select').forEach(initDosenSelect);
         document.querySelectorAll('#containerPenulisMahasiswa .mahasiswa-select').forEach(initMahasiswaSelect);
         initJurnalSelect(document.getElementById('nama_jurnal'));
+        initPenerbitSelect(document.getElementById('penerbit'));
     });
 
     // Escape HTML string
@@ -784,17 +847,29 @@
     }
 
     function deleteExistingDoc(docId) {
-        if (!confirm('Yakin hapus dokumen ini?')) return;
-        fetch(`/publikasi-dokumen/${docId}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Content-Type': 'application/json'
-            }
-        }).then(res => res.json()).then(data => {
-            if(data.success) {
-                document.getElementById(`doc_row_${docId}`).remove();
-            }
+        appConfirm({
+            title: 'Hapus Dokumen',
+            message: 'Yakin hapus dokumen ini? Dokumen yang sudah dihapus tidak bisa dikembalikan.',
+            confirmText: 'Ya, Hapus',
+            variant: 'danger',
+        }).then((ok) => {
+            if (!ok) return;
+            fetch(`/publikasi-dokumen/${docId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json'
+                }
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    document.getElementById(`doc_row_${docId}`).remove();
+                    appNotify('success', 'Dokumen berhasil dihapus.');
+                } else {
+                    appNotify('error', 'Dokumen gagal dihapus. Silakan coba lagi.');
+                }
+            }).catch(() => {
+                appNotify('error', 'Dokumen gagal dihapus. Silakan coba lagi.');
+            });
         });
     }
 
@@ -813,11 +888,11 @@
         const file = fileInput.files[0];
         
         if (!name) {
-            alert('Nama dokumen wajib diisi!');
+            appNotify('warning', 'Nama dokumen wajib diisi!', 'Validasi Dokumen');
             return;
         }
         if (!file && !link) {
-            alert('Wajib memilih file untuk diupload atau memasukkan tautan dokumen!');
+            appNotify('warning', 'Wajib memilih file untuk diupload atau memasukkan tautan dokumen!', 'Validasi Dokumen');
             return;
         }
         

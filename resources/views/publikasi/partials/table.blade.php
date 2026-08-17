@@ -52,7 +52,7 @@
                             <a href="{{ route('publikasi.edit', ['publikasi' => $pub->id, 'page' => $publikasiList->currentPage(), 'search' => request('search')]) }}" class="btn btn-sm btn-warning text-white" title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form action="{{ route('publikasi.destroy', $pub->id) }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus publikasi ini?')" class="d-inline">
+                            <form action="{{ route('publikasi.destroy', $pub->id) }}" method="POST" class="d-inline js-delete-publikasi-form">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-danger" title="Hapus">

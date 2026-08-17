@@ -64,6 +64,24 @@
         const container = document.getElementById('table-publikasi-container');
         let timeout = null;
 
+        // Konfirmasi hapus Publikasi Karya - dipasang lewat event delegation
+        // di container (bukan langsung di form), supaya tetap jalan walau
+        // tabel-nya di-render ulang lewat AJAX pencarian di bawah (innerHTML
+        // diganti, tapi container-nya sendiri tidak pernah diganti).
+        container.addEventListener('submit', function(e) {
+            const form = e.target.closest('.js-delete-publikasi-form');
+            if (!form) return;
+            e.preventDefault();
+            appConfirm({
+                title: 'Hapus Publikasi Karya',
+                message: 'Yakin ingin menghapus publikasi ini? Data yang sudah dihapus tidak bisa dikembalikan.',
+                confirmText: 'Ya, Hapus',
+                variant: 'danger',
+            }).then((ok) => {
+                if (ok) form.submit();
+            });
+        });
+
         // Perform AJAX search
         function doSearch(page = 1) {
             const query = searchInput.value;

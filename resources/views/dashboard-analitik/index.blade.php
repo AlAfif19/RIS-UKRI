@@ -2,6 +2,15 @@
 
 @section('content')
 
+    @php
+        // Dosen (non-admin) tidak perlu melihat kartu/ranking yang isinya
+        // seluruh dosen/mahasiswa (data dosen sudah dibatasi hanya ke
+        // publikasi miliknya sendiri di DashboardAnalitikController, jadi
+        // "Dosen Aktif", "Mahasiswa Aktif", dan ranking Top 10 tidak relevan
+        // buat dia - selalu berisi dirinya sendiri saja).
+        $isAdmin = auth()->user()->hasRole('admin');
+    @endphp
+
     <div class="pagetitle">
         <h1>Dashboard Analitik Publikasi Karya</h1>
         <nav>
@@ -64,7 +73,7 @@
         <!-- KPI Cards (Row Atas) -->
         <div class="row g-3 mb-3">
             <!-- 1. Total Publikasi -->
-            <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="col-lg-{{ $isAdmin ? '2' : '3' }} col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #0d6efd !important;">
                     <div class="card-body py-3">
                         <div class="text-muted small fw-bold">TOTAL PUBLIKASI</div>
@@ -81,7 +90,7 @@
             </div>
 
             <!-- 2. Publikasi Tahun Ini -->
-            <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="col-lg-{{ $isAdmin ? '2' : '3' }} col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #198754 !important;">
                     <div class="card-body py-3">
                         <div class="text-muted small fw-bold">TAHUN INI</div>
@@ -98,7 +107,7 @@
             </div>
 
             <!-- 3. Total Dokumen -->
-            <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="col-lg-{{ $isAdmin ? '2' : '3' }} col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #0dcaf0 !important;">
                     <div class="card-body py-3">
                         <div class="text-muted small fw-bold">DOKUMEN</div>
@@ -114,7 +123,8 @@
                 </div>
             </div>
 
-            <!-- 4. Dosen Penulis Aktif -->
+            @if($isAdmin)
+            <!-- 4. Dosen Penulis Aktif (khusus admin) -->
             <div class="col-lg-2 col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #ffc107 !important;">
                     <div class="card-body py-3">
@@ -131,7 +141,7 @@
                 </div>
             </div>
 
-            <!-- 5. Mahasiswa Penulis Aktif -->
+            <!-- 5. Mahasiswa Penulis Aktif (khusus admin) -->
             <div class="col-lg-2 col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #6f42c1 !important;">
                     <div class="card-body py-3">
@@ -147,9 +157,10 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             <!-- 6. Rata-rata Penulis -->
-            <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="col-lg-{{ $isAdmin ? '2' : '3' }} col-md-4 col-sm-6">
                 <div class="card border-0 shadow-sm h-100 bg-white" style="border-left: 4px solid #fd7e14 !important;">
                     <div class="card-body py-3">
                         <div class="text-muted small fw-bold">RATA PENULIS</div>
@@ -256,7 +267,8 @@
             </div>
         </div>
 
-        <!-- Leaderboards Row 1 -->
+        @if($isAdmin)
+        <!-- Leaderboards Row 1 (khusus admin - dosen hanya melihat datanya sendiri, jadi ranking Top 10 tidak relevan) -->
         <div class="row g-3 mb-3">
             <!-- 1. Dosen Paling Produktif -->
             <div class="col-lg-6">
@@ -332,6 +344,7 @@
                 </div>
             </div>
         </div>
+        @endif
 
         <!-- Leaderboards Row 2 -->
         <div class="row g-3 mb-3">
@@ -733,39 +746,54 @@
 
             function updateDashboard(data) {
                 // KPI Cards
-                document.getElementById('kpi-total-publikasi').textContent = data.totalPublikasi;
-                document.getElementById('kpi-publikasi-tahun-ini').textContent = data.publikasiTahunIni;
-                document.getElementById('kpi-total-dokumen').textContent = data.totalDokumen;
-                document.getElementById('kpi-dosen-aktif').textContent = data.dosenAktif;
-                document.getElementById('kpi-mahasiswa-aktif').textContent = data.mahasiswaAktif;
-                document.getElementById('kpi-rata-penulis').textContent = data.rataPenulis;
-                document.getElementById('kpi-tanpa-doi').textContent = data.countTanpaDoi;
+                // PERBAIKAN: pakai helper yang cek null dulu - beberapa kartu
+                // (Dosen Aktif, Mahasiswa Aktif) sengaja tidak dirender sama
+                // sekali di halaman untuk role dosen (lihat kondisi isAdmin di
+                // atas), jadi getElementById-nya bisa null. Sebelumnya baris
+                // ini langsung .textContent tanpa cek, jadi begitu ketemu
+                // elemen yang null langsung error dan seluruh proses update
+                // (termasuk chart & tabel di bawahnya) ikut berhenti.
+                const setText = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = val;
+                };
+                setText('kpi-total-publikasi', data.totalPublikasi);
+                setText('kpi-publikasi-tahun-ini', data.publikasiTahunIni);
+                setText('kpi-total-dokumen', data.totalDokumen);
+                setText('kpi-dosen-aktif', data.dosenAktif);
+                setText('kpi-mahasiswa-aktif', data.mahasiswaAktif);
+                setText('kpi-rata-penulis', data.rataPenulis);
+                setText('kpi-tanpa-doi', data.countTanpaDoi);
 
                 // Charts
                 updateCharts(data);
 
-                // Top Dosen
+                // Top Dosen (tidak dirender untuk role dosen - lihat kondisi isAdmin)
                 const tbodyDosen = document.getElementById('tbody-top-dosen');
-                tbodyDosen.innerHTML = data.topDosen.length ? data.topDosen.map((d, idx) => `
-                    <tr>
-                        <td>${idx + 1}</td>
-                        <td><code>${escapeHtml(d.nidn)}</code></td>
-                        <td>${escapeHtml(d.nama)}</td>
-                        <td class="text-end fw-bold text-primary">${d.jumlah}</td>
-                    </tr>
-                `).join('') : `<tr><td colspan="4" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+                if (tbodyDosen) {
+                    tbodyDosen.innerHTML = data.topDosen.length ? data.topDosen.map((d, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><code>${escapeHtml(d.nidn)}</code></td>
+                            <td>${escapeHtml(d.nama)}</td>
+                            <td class="text-end fw-bold text-primary">${d.jumlah}</td>
+                        </tr>
+                    `).join('') : `<tr><td colspan="4" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+                }
 
-                // Top Mahasiswa
+                // Top Mahasiswa (tidak dirender untuk role dosen)
                 const tbodyMhs = document.getElementById('tbody-top-mahasiswa');
-                tbodyMhs.innerHTML = data.topMahasiswa.length ? data.topMahasiswa.map((m, idx) => `
-                    <tr>
-                        <td>${idx + 1}</td>
-                        <td><code>${escapeHtml(m.nim)}</code></td>
-                        <td>${escapeHtml(m.nama)}</td>
-                        <td>${escapeHtml(m.prodi ?? '-')}</td>
-                        <td class="text-end fw-bold text-success">${m.jumlah}</td>
-                    </tr>
-                `).join('') : `<tr><td colspan="5" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+                if (tbodyMhs) {
+                    tbodyMhs.innerHTML = data.topMahasiswa.length ? data.topMahasiswa.map((m, idx) => `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td><code>${escapeHtml(m.nim)}</code></td>
+                            <td>${escapeHtml(m.nama)}</td>
+                            <td>${escapeHtml(m.prodi ?? '-')}</td>
+                            <td class="text-end fw-bold text-success">${m.jumlah}</td>
+                        </tr>
+                    `).join('') : `<tr><td colspan="5" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
+                }
 
                 // Top Afiliasi
                 const tbodyAfiliasi = document.getElementById('tbody-top-afiliasi');

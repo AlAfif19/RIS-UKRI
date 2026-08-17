@@ -64,7 +64,35 @@ class PublikasiController extends Controller
     {
         $aktivitasLitabmas = MasterAktivitasLitabmas::all();
 
-        return view('publikasi.create', compact('aktivitasLitabmas'));
+        // Kalau yang login adalah Dosen (bukan admin), baris pertama di
+        // tabel Penulis Dosen otomatis diisi datadirinya sendiri - supaya
+        // tidak perlu cari nama sendiri lagi di dropdown tiap kali mau
+        // input publikasi baru. Tetap sepenuhnya bisa diganti/dihapus
+        // seperti baris biasa (lihat initDosenLoginAutofill() di
+        // create.blade.php), field ini cuma nilai AWAL yang di-prefill.
+        //
+        // Resolusi dosen_id login pakai pola yang SAMA PERSIS dengan
+        // index() di atas: prioritaskan dosen_id yang sudah ditautkan saat
+        // login (SSO/guest-login), fallback ke pencarian by email kalau
+        // dosen_id kosong.
+        $loggedDosen = null;
+        $user = auth()->user();
+        if ($user && !$user->hasRole('admin')) {
+            $dosen = filled($user->dosen_id)
+                ? Dosen::with('prodi:id,nama_prodi')->find($user->dosen_id)
+                : Dosen::with('prodi:id,nama_prodi')->where('email', $user->email)->first();
+
+            if ($dosen) {
+                $loggedDosen = [
+                    'id' => $dosen->id,
+                    'nidn' => $dosen->nidn,
+                    'nama' => $dosen->nama,
+                    'prodi' => optional($dosen->prodi)->nama_prodi,
+                ];
+            }
+        }
+
+        return view('publikasi.create', compact('aktivitasLitabmas', 'loggedDosen'));
     }
 
     public function store(Request $request)
@@ -528,6 +556,68 @@ class PublikasiController extends Controller
             ->map(fn ($rows) => trim($rows->first()->nama_jurnal))
             ->values()
             ->sort(fn ($a, $b) => strcasecmp($a, $b))
+            ->values();
+
+        return response()->json($daftar);
+    }
+
+    /**
+     * Semua nama Penerbit/Penyelenggara yang pernah dientri di publikasi
+     * manapun - dipakai untuk autocomplete field "Penerbit/Penyelenggara" di
+     * form Publikasi Karya, pola & alasannya sama persis dengan
+     * apiAllJurnal(): variasi kapitalisasi/spasi disamakan dulu supaya tidak
+     * dianggap penerbit yang berbeda, tapi tetap bisa mengetik nama penerbit
+     * baru kalau memang belum pernah ada (create:true di Tom Select).
+     */
+    public function apiAllPenerbit()
+    {
+        $daftar = Publikasi::whereNotNull('penerbit')
+            ->where('penerbit', '<>', '')
+            ->select('penerbit')
+            ->get()
+            ->groupBy(fn ($row) => \Illuminate\Support\Str::lower(trim($row->penerbit)))
+            ->map(fn ($rows) => trim($rows->first()->penerbit))
+            ->values()
+            ->sort(fn ($a, $b) => strcasecmp($a, $b))
+            ->values();
+
+        return response()->json($daftar);
+    }
+
+    /**
+     * Semua nama "Penulis Lain" (kolaborator eksternal) yang pernah dientri
+     * di publikasi manapun - dipakai untuk autocomplete field "Nama
+     * Kolaborator" di form Publikasi Karya, sama persis polanya dengan
+     * apiAllJurnal(): kalau nama itu sudah pernah diinput sebelumnya, tinggal
+     * dipilih dari dropdown (menghindari data ganda karena beda
+     * kapitalisasi/spasi/typo kecil); kalau belum pernah ada, tetap bisa
+     * diketik bebas sebagai kolaborator baru (create:true di Tom Select).
+     *
+     * Tidak ada tabel master untuk Penulis Lain (beda dengan Dosen/Mahasiswa
+     * yang mirror dari Master Data API UKRI) - jadi daftarnya diambil
+     * langsung dari baris-baris publikasi_penulis_lain yang sudah pernah
+     * tersimpan. Afiliasi disertakan (ambil dari baris TERBARU untuk nama
+     * yang sama) supaya field Afiliasi bisa ikut terisi otomatis begitu
+     * kolaborator lama dipilih - lihat onItemAdd di initPenulisLainSelect()
+     * pada create.blade.php.
+     */
+    public function apiAllPenulisLain()
+    {
+        $daftar = PublikasiPenulisLain::whereNotNull('nama')
+            ->where('nama', '<>', '')
+            ->orderByDesc('id')
+            ->select('nama', 'afiliasi')
+            ->get()
+            ->groupBy(fn ($row) => \Illuminate\Support\Str::lower(trim($row->nama)))
+            ->map(function ($rows) {
+                $terbaru = $rows->first(); // sudah diurutkan id desc di atas
+                return [
+                    'nama' => trim($terbaru->nama),
+                    'afiliasi' => filled($terbaru->afiliasi) ? trim($terbaru->afiliasi) : null,
+                ];
+            })
+            ->values()
+            ->sort(fn ($a, $b) => strcasecmp($a['nama'], $b['nama']))
             ->values();
 
         return response()->json($daftar);
