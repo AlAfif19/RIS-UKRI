@@ -241,9 +241,21 @@ class SsoController extends Controller
         $user->syncRoles([$role]);
 
         if ($role === 'dosen') {
-            $user->forceFill([
-                'dosen_id' => $this->cariDosenUntukUser($ssoUser, $ssoId, $email),
-            ])->save();
+            $dosenIdMatch = $this->cariDosenUntukUser($ssoUser, $ssoId, $email);
+            if ($dosenIdMatch) {
+                $user->forceFill(['dosen_id' => $dosenIdMatch])->save();
+            } elseif (blank($user->dosen_id)) {
+                // Jika dosen_id di DB masih kosong dan cariDosenUntukUser tidak menemukan match,
+                // coba cari dengan email case-insensitive sebagai fallback akhir.
+                if (filled($email)) {
+                    $fallbackDosen = Dosen::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
+                    if ($fallbackDosen) {
+                        $user->forceFill(['dosen_id' => $fallbackDosen->id])->save();
+                    }
+                }
+            }
+            // PENTING: Jika $user->dosen_id sudah terisi di database, JANGAN PERNAH
+            // menimpanya dengan NULL apabila pencarian SSO gagal.
         }
 
         return $user;
@@ -255,10 +267,8 @@ class SsoController extends Controller
      *
      * Urutan pencocokan: `ukri_id` (id akun SSO, kalau berupa angka —
      * paling akurat karena satu sumber identitas dengan Master Data API),
-     * lalu NIDN (kalau username SSO memang diisi NIDN), lalu email sebagai
-     * fallback terakhir. Return null kalau tidak ada yang cocok (mis. data
-     * dosennya belum sempat di-sync lewat `php artisan ukri:sync dosen`) —
-     * publikasi tetap tidak akan tampil ke akun ini sampai tertaut.
+     * lalu NIDN (kalau username SSO memang diisi NIDN), lalu email (case-insensitive)
+     * sebagai fallback terakhir. Return null kalau tidak ada yang cocok.
      */
     private function cariDosenUntukUser(array $ssoUser, string $ssoId, string $email): ?int
     {
@@ -279,7 +289,7 @@ class SsoController extends Controller
         }
 
         if (filled($email)) {
-            $dosen = Dosen::where('email', $email)->first();
+            $dosen = Dosen::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
             if ($dosen) {
                 return $dosen->id;
             }
