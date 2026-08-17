@@ -22,8 +22,15 @@ class PublikasiController extends Controller
 
         $user = auth()->user();
         if ($user && !$user->hasRole('admin')) {
+            // Prioritaskan dosen_id yang sudah ditautkan saat login (SSO:
+            // ukri_id -> nidn -> email, atau guest-login). Fallback ke
+            // pencarian by email HANYA kalau dosen_id kosong, supaya akun
+            // yang tertaut lewat ukri_id/nidn tapi emailnya beda dari tabel
+            // `dosen` tetap bisa melihat publikasi miliknya sendiri.
             $userEmail = $user->email;
-            $dosenIds = \App\Models\Dosen::where('email', $userEmail)->pluck('id')->toArray();
+            $dosenIds = filled($user->dosen_id)
+                ? [$user->dosen_id]
+                : \App\Models\Dosen::where('email', $userEmail)->pluck('id')->toArray();
             $mahasiswaIds = \App\Models\Mahasiswa::where('email', $userEmail)->pluck('id')->toArray();
 
             $query->where(function($q) use ($dosenIds, $mahasiswaIds) {
@@ -569,8 +576,12 @@ class PublikasiController extends Controller
     {
         $user = auth()->user();
         if ($user && !$user->hasRole('admin')) {
+            // Konsisten dengan index(): dosen_id yang sudah ditautkan saat
+            // login diprioritaskan, email cuma fallback kalau dosen_id kosong.
             $userEmail = $user->email;
-            $dosenIds = \App\Models\Dosen::where('email', $userEmail)->pluck('id')->toArray();
+            $dosenIds = filled($user->dosen_id)
+                ? [$user->dosen_id]
+                : \App\Models\Dosen::where('email', $userEmail)->pluck('id')->toArray();
             $mahasiswaIds = \App\Models\Mahasiswa::where('email', $userEmail)->pluck('id')->toArray();
 
             $isOwner = $publikasi->penulisDosen()->whereIn('dosen_id', $dosenIds)->exists() ||
