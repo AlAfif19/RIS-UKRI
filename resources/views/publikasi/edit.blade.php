@@ -15,6 +15,54 @@
         .ts-dropdown {
             z-index: 9999;
         }
+
+        /* Dropdown "judul mirip" - senada dengan dropdown Tom Select di atas,
+           lihat catatan yang sama di resources/views/publikasi/create.blade.php */
+        #judul-wrap {
+            position: relative;
+        }
+        #judul-mirip-hasil {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            margin-top: 2px;
+            background: #fff;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        #judul-mirip-hasil .judul-mirip-header {
+            padding: 8px 14px;
+            font-size: 0.8rem;
+            border-bottom: 1px solid #eef0f3;
+            color: #6c757d;
+        }
+        #judul-mirip-hasil .judul-mirip-item {
+            padding: 8px 14px;
+            font-size: 0.88rem;
+            border-bottom: 1px solid #f5f6f8;
+            cursor: default;
+        }
+        #judul-mirip-hasil .judul-mirip-item:last-child {
+            border-bottom: none;
+        }
+        #judul-mirip-hasil .judul-mirip-item:hover {
+            background: #f5f8ff;
+        }
+        #judul-mirip-hasil .judul-mirip-item mark {
+            background: #fff3ac;
+            padding: 0;
+            color: inherit;
+        }
+        #judul-mirip-hasil .no-results,
+        #judul-mirip-hasil .create {
+            padding: 10px 14px;
+            font-size: 0.88rem;
+        }
     </style>
 @endpush
 
@@ -24,7 +72,7 @@
     <h1>Edit Publikasi Karya</h1>
     <nav>
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ route('dashboard-analitik.index') }}">Home</a></li>
             <li class="breadcrumb-item"><a href="{{ route('publikasi.index') }}">Publikasi Karya</a></li>
             <li class="breadcrumb-item active">Edit</li>
         </ol>
@@ -143,7 +191,10 @@
 
                             <div class="col-md-12">
                                 <label for="judul" class="form-label fw-bold">Judul Artikel <span class="text-danger">*</span></label>
-                                <input type="text" name="judul" id="judul" class="form-control form-control-sm" required value="{{ $publikasi->judul }}">
+                                <div id="judul-wrap">
+                                    <input type="text" name="judul" id="judul" class="form-control form-control-sm" required value="{{ $publikasi->judul }}" autocomplete="off">
+                                    <div id="judul-mirip-hasil" style="display:none;"></div>
+                                </div>
                             </div>
 
                             <div class="col-md-6">
@@ -152,8 +203,18 @@
                             </div>
 
                             <div class="col-md-6">
+                                <label for="issn" class="form-label">ISSN</label>
+                                <input type="text" name="issn" id="issn" class="form-control form-control-sm" value="{{ $publikasi->issn }}">
+                            </div>
+
+                            <div class="col-md-6">
                                 <label for="tautan_jurnal" class="form-label">Tautan Laman Jurnal</label>
                                 <input type="url" name="tautan_jurnal" id="tautan_jurnal" class="form-control form-control-sm" value="{{ $publikasi->tautan_jurnal }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="tautan_eksternal" class="form-label">Tautan Eksternal</label>
+                                <input type="url" name="tautan_eksternal" id="tautan_eksternal" class="form-control form-control-sm" value="{{ $publikasi->tautan_eksternal }}">
                             </div>
 
                             <div class="col-md-4">
@@ -184,16 +245,6 @@
                             <div class="col-md-4">
                                 <label for="doi" class="form-label">DOI</label>
                                 <input type="text" name="doi" id="doi" class="form-control form-control-sm" value="{{ $publikasi->doi }}">
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="issn" class="form-label">ISSN</label>
-                                <input type="text" name="issn" id="issn" class="form-control form-control-sm" value="{{ $publikasi->issn }}">
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="tautan_eksternal" class="form-label">Tautan Eksternal</label>
-                                <input type="url" name="tautan_eksternal" id="tautan_eksternal" class="form-control form-control-sm" value="{{ $publikasi->tautan_eksternal }}">
                             </div>
 
                             <div class="col-md-12">
@@ -338,13 +389,11 @@
                             <table class="table table-bordered align-middle">
                                 <thead class="table-light">
                                     <tr>
-                                        <th style="width: 15%">NIDN</th>
-                                        <th style="width: 20%">Nama Dosen</th>
-                                        <th style="width: 15%">Perguruan Tinggi</th>
-                                        <th style="width: 8%">Urutan</th>
-                                        <th style="width: 12%">Afiliasi</th>
-                                        <th style="width: 10%">Peran</th>
-                                        <th style="width: 10%" class="text-center">Corresponding</th>
+                                        <th style="width: 35%">Nama Dosen</th>
+                                        <th style="width: 10%">Urutan</th>
+                                        <th style="width: 15%">Afiliasi</th>
+                                        <th style="width: 15%">Peran</th>
+                                        <th style="width: 15%" class="text-center">Corresponding Author</th>
                                         <th style="width: 10%" class="text-center">Aksi</th>
                                     </tr>
                                 </thead>
@@ -352,19 +401,19 @@
                                     @foreach($publikasi->penulisDosen as $idx => $pd)
                                         <tr class="row-penulis-dosen">
                                             <td>
-                                                <input type="text" name="penulis_dosen[{{ $idx }}][nidn]" class="form-control form-control-sm table-editable-cell" placeholder="NIDN Dosen" value="{{ $pd->dosen->nidn ?? '' }}">
-                                            </td>
-                                            <td>
-                                                <input type="text" name="penulis_dosen[{{ $idx }}][nama_dosen]" class="form-control form-control-sm table-editable-cell" placeholder="Nama Lengkap Dosen" value="{{ $pd->dosen->nama ?? '' }}" required>
-                                            </td>
-                                            <td>
-                                                <input type="text" name="penulis_dosen[{{ $idx }}][nama_pt]" class="form-control form-control-sm table-editable-cell" placeholder="Nama PT / Univ" value="{{ $pd->dosen->perguruanTinggi->nama_pt ?? '' }}">
+                                                <select name="penulis_dosen[{{ $idx }}][dosen_id]" class="form-select form-select-sm table-editable-cell dosen-select" required>
+                                                    @if($pd->dosen)
+                                                        <option value="{{ $pd->dosen->id }}" selected>{{ $pd->dosen->nidn }} - {{ $pd->dosen->nama }}</option>
+                                                    @else
+                                                        <option value="">-- Pilih Dosen --</option>
+                                                    @endif
+                                                </select>
                                             </td>
                                             <td>
                                                 <input type="number" name="penulis_dosen[{{ $idx }}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="{{ $pd->urutan }}">
                                             </td>
                                             <td>
-                                                <input type="text" name="penulis_dosen[{{ $idx }}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi" value="{{ $pd->afiliasi }}">
+                                                <input type="text" name="penulis_dosen[{{ $idx }}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi" value="{{ $pd->afiliasi ?: 'Universitas Kebangsaan Republik Indonesia' }}">
                                             </td>
                                             <td>
                                                 <select name="penulis_dosen[{{ $idx }}][peran]" class="form-select form-select-sm table-editable-cell">
@@ -432,7 +481,7 @@
                                                 <input type="number" name="penulis_mahasiswa[{{ $idx }}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="{{ $pm->urutan }}">
                                             </td>
                                             <td>
-                                                <input type="text" name="penulis_mahasiswa[{{ $idx }}][afiliasi]" class="form-control form-control-sm table-editable-cell" value="{{ $pm->afiliasi }}">
+                                                <input type="text" name="penulis_mahasiswa[{{ $idx }}][afiliasi]" class="form-control form-control-sm table-editable-cell" value="{{ $pm->afiliasi ?: 'Universitas Kebangsaan Republik Indonesia' }}">
                                             </td>
                                             <td>
                                                 <select name="penulis_mahasiswa[{{ $idx }}][peran]" class="form-select form-select-sm table-editable-cell">
@@ -555,6 +604,54 @@
     let mhsCount = {{ $publikasi->penulisMahasiswa->count() }};
     let lainCount = {{ $publikasi->penulisLain->count() }};
 
+    // Afiliasi Penulis Dosen & Mahasiswa otomatis terisi nama kampus sendiri
+    // (Penulis Lain / kolaborator eksternal tetap kosong karena memang dari
+    // instansi lain).
+    const DEFAULT_AFILIASI = 'Universitas Kebangsaan Republik Indonesia';
+
+    // Semua dosen dimuat SEKALI ke memori browser, sama seperti mahasiswa
+    // di bawah - pencariannya dilakukan lokal oleh Tom Select.
+    let dosenOptionsPromise = null;
+
+    function loadAllDosenOptions() {
+        if (!dosenOptionsPromise) {
+            dosenOptionsPromise = fetch(`{{ route('api.dosen.all') }}`)
+                .then((r) => r.json())
+                .then((data) => data.map((d) => ({
+                    value: String(d.id),
+                    text: d.nidn + ' - ' + d.nama + (d.prodi ? ' (' + d.prodi.nama_prodi + ')' : ''),
+                })))
+                .catch(() => []);
+        }
+        return dosenOptionsPromise;
+    }
+
+    // Baris yang sudah ada (hasil render server) hanya membawa satu
+    // <option> terpilih - Tom Select otomatis mempertahankannya sebagai
+    // item awal begitu daftar lengkapnya selesai dimuat di belakang layar.
+    function initDosenSelect(selectEl) {
+        if (!selectEl || selectEl.tomselect) return;
+        const ts = new TomSelect(selectEl, {
+            valueField: 'value',
+            labelField: 'text',
+            searchField: ['text'],
+            create: false,
+            maxItems: 1,
+            maxOptions: 100,
+            dropdownParent: 'body',
+            render: {
+                no_results: function (data, escape) {
+                    return `<div class="no-results">Dosen "${escape(data.input)}" tidak ditemukan</div>`;
+                },
+            },
+        });
+
+        loadAllDosenOptions().then((options) => {
+            ts.addOptions(options);
+            ts.refreshOptions(false);
+        });
+    }
+
     // Semua mahasiswa dimuat SEKALI ke memori browser (bukan per-baris,
     // bukan per-huruf yang diketik), lalu pencariannya dilakukan lokal oleh
     // Tom Select - jadi instan, tidak ada request ke server tiap mengetik.
@@ -604,8 +701,66 @@
         });
     }
 
+    // Nama Jurnal - semua nama jurnal yang PERNAH dientri di seluruh
+    // publikasi (bukan cuma milik dosen yang sedang login) dimuat SEKALI ke
+    // memori browser, sama seperti dosen/mahasiswa di atas. Tom Select
+    // mencocokkan ketikan dengan yang paling mirip di daftar itu (kalau
+    // ketemu berarti jurnalnya sudah pernah dientri sebelumnya - tinggal
+    // pilih, bukan bikin baris data baru yang beda kapitalisasi/spasi dari
+    // yang sudah ada); kalau tidak ada yang mirip sama sekali, create:true
+    // mengizinkan ketikan itu langsung dipakai sebagai nama jurnal BARU.
+    let jurnalOptionsPromise = null;
+
+    function loadAllJurnalOptions() {
+        if (!jurnalOptionsPromise) {
+            jurnalOptionsPromise = fetch(`{{ route('api.jurnal.all') }}`)
+                .then((r) => r.json())
+                .then((data) => data.map((nama) => ({ value: nama, text: nama })))
+                .catch(() => []);
+        }
+        return jurnalOptionsPromise;
+    }
+
+    function initJurnalSelect(inputEl) {
+        if (!inputEl || inputEl.tomselect) return;
+        const initialValue = inputEl.value;
+        const ts = new TomSelect(inputEl, {
+            valueField: 'value',
+            labelField: 'text',
+            searchField: ['text'],
+            create: true,
+            createOnBlur: true,
+            persist: false,
+            maxItems: 1,
+            maxOptions: 100,
+            dropdownParent: 'body',
+            render: {
+                option_create: function (data, escape) {
+                    return `<div class="create">Belum ada yang mirip - pakai sebagai jurnal baru: <strong>"${escape(data.input)}"</strong></div>`;
+                },
+                no_results: function (data, escape) {
+                    return `<div class="no-results">Tidak ada jurnal tersimpan yang mirip "${escape(data.input)}"</div>`;
+                },
+            },
+        });
+
+        loadAllJurnalOptions().then((options) => {
+            ts.addOptions(options);
+            ts.refreshOptions(false);
+            // Nilai yang sudah tersimpan sebelumnya (dari database) tetap
+            // dipertahankan sebagai item terpilih, walau kebetulan tidak ada
+            // di daftar (misal sudah diedit manual di DB).
+            if (initialValue) {
+                ts.addOption({ value: initialValue, text: initialValue });
+                ts.setValue(initialValue, true);
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('#containerPenulisDosen .dosen-select').forEach(initDosenSelect);
         document.querySelectorAll('#containerPenulisMahasiswa .mahasiswa-select').forEach(initMahasiswaSelect);
+        initJurnalSelect(document.getElementById('nama_jurnal'));
     });
 
     // Escape HTML string
@@ -762,7 +917,7 @@
         }
     }
 
-    // 3. Penulis Dosen Rows (Manual inputs)
+    // 3. Penulis Dosen Rows (dropdown pencarian dosen, sama seperti Penulis Mahasiswa)
     function addPenulisDosenRow() {
         const container = document.getElementById('containerPenulisDosen');
         const row = document.createElement('tr');
@@ -770,19 +925,15 @@
         const nextIdx = dosenCount++;
         row.innerHTML = `
             <td>
-                <input type="text" name="penulis_dosen[${nextIdx}][nidn]" class="form-control form-control-sm table-editable-cell" placeholder="NIDN Dosen">
-            </td>
-            <td>
-                <input type="text" name="penulis_dosen[${nextIdx}][nama_dosen]" class="form-control form-control-sm table-editable-cell" placeholder="Nama Lengkap Dosen" required>
-            </td>
-            <td>
-                <input type="text" name="penulis_dosen[${nextIdx}][nama_pt]" class="form-control form-control-sm table-editable-cell" placeholder="Nama PT / Univ">
+                <select name="penulis_dosen[${nextIdx}][dosen_id]" class="form-select form-select-sm table-editable-cell dosen-select" required>
+                    <option value="">-- Pilih Dosen --</option>
+                </select>
             </td>
             <td>
                 <input type="number" name="penulis_dosen[${nextIdx}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="${container.children.length + 1}">
             </td>
             <td>
-                <input type="text" name="penulis_dosen[${nextIdx}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi">
+                <input type="text" name="penulis_dosen[${nextIdx}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi" value="${DEFAULT_AFILIASI}">
             </td>
             <td>
                 <select name="penulis_dosen[${nextIdx}][peran]" class="form-select form-select-sm table-editable-cell">
@@ -804,6 +955,7 @@
             </td>
         `;
         container.appendChild(row);
+        initDosenSelect(row.querySelector('.dosen-select'));
     }
 
     // 4. Penulis Mahasiswa Rows
@@ -822,7 +974,7 @@
                 <input type="number" name="penulis_mahasiswa[${nextIdx}][urutan]" class="form-control form-control-sm input-urutan table-editable-cell" value="${container.children.length + 1}">
             </td>
             <td>
-                <input type="text" name="penulis_mahasiswa[${nextIdx}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi">
+                <input type="text" name="penulis_mahasiswa[${nextIdx}][afiliasi]" class="form-control form-control-sm table-editable-cell" placeholder="Afiliasi" value="${DEFAULT_AFILIASI}">
             </td>
             <td>
                 <select name="penulis_mahasiswa[${nextIdx}][peran]" class="form-select form-select-sm table-editable-cell">
@@ -943,5 +1095,89 @@
             }
         }
     });
+
+    // Cek Judul Artikel mirip - sama seperti di form Tambah, dicari lintas
+    // SEMUA publikasi (bukan cuma milik dosen ybs), tapi judul publikasi ini
+    // sendiri dikecualikan (exclude_id) supaya tidak "mirip" dengan dirinya
+    // sendiri.
+    (function () {
+        const judulInput = document.getElementById('judul');
+        const hasilBox = document.getElementById('judul-mirip-hasil');
+        if (!judulInput || !hasilBox) return;
+
+        const excludeId = {{ $publikasi->id }};
+        const MIN_CHARS = 3;
+        let debounceTimer = null;
+        let requestSeq = 0;
+
+        function escapeHtmlLocal(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function highlight(text, q) {
+            const escaped = escapeHtmlLocal(text);
+            if (!q) return escaped;
+            const idx = text.toLowerCase().indexOf(q.toLowerCase());
+            if (idx === -1) return escaped;
+            const before = escapeHtmlLocal(text.slice(0, idx));
+            const match = escapeHtmlLocal(text.slice(idx, idx + q.length));
+            const after = escapeHtmlLocal(text.slice(idx + q.length));
+            return `${before}<mark>${match}</mark>${after}`;
+        }
+
+        function hide() {
+            hasilBox.style.display = 'none';
+            hasilBox.innerHTML = '';
+        }
+
+        judulInput.addEventListener('input', function () {
+            const q = judulInput.value.trim();
+            clearTimeout(debounceTimer);
+
+            if (q.length < MIN_CHARS) {
+                hide();
+                return;
+            }
+
+            debounceTimer = setTimeout(() => {
+                const seq = ++requestSeq;
+                const url = `{{ route('api.publikasi.cek-judul') }}?q=${encodeURIComponent(q)}&exclude_id=${excludeId}`;
+
+                fetch(url)
+                    .then((r) => r.json())
+                    .then((data) => {
+                        if (seq !== requestSeq) return;
+                        if (judulInput.value.trim().length < MIN_CHARS) return hide();
+
+                        if (!data.length) {
+                            hasilBox.style.display = 'block';
+                            hasilBox.innerHTML = `<div class="no-results"><i class="bi bi-check-circle text-success"></i> Tidak ada judul mirip yang ditemukan untuk "${escapeHtmlLocal(q)}".</div>`;
+                            return;
+                        }
+
+                        const header = `<div class="judul-mirip-header"><i class="bi bi-exclamation-triangle text-warning"></i> ${data.length} judul mirip ditemukan di database:</div>`;
+                        const items = data.map((p) => {
+                            const tanggal = p.tanggal_terbit ? ` &middot; ${escapeHtmlLocal(p.tanggal_terbit)}` : '';
+                            const jurnal = p.nama_jurnal ? ` &middot; ${escapeHtmlLocal(p.nama_jurnal)}` : '';
+                            return `<div class="judul-mirip-item">${highlight(p.judul, q)}<div class="text-muted">${jurnal}${tanggal}</div></div>`;
+                        }).join('');
+
+                        hasilBox.style.display = 'block';
+                        hasilBox.innerHTML = header + items;
+                    })
+                    .catch(() => {
+                        if (seq !== requestSeq) return;
+                        hide();
+                    });
+            }, 300);
+        });
+
+        judulInput.addEventListener('blur', function () {
+            setTimeout(hide, 150);
+        });
+    })();
 </script>
 @endpush

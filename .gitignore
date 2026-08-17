@@ -13,6 +13,9 @@
 Homestead.json
 Homestead.yaml
 auth.json
+
+# Guest login lokal (lihat routes/dev-login.php) — jangan pernah di-commit/push
+/routes/dev-login.php
 npm-debug.log
 yarn-error.log
 /.fleet
@@ -26,3 +29,7 @@ yarn-error.log
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*
+
+# DB dumps
+/*.sql
+

@@ -27,6 +27,7 @@ class User extends Authenticatable
         'email',
         'password',
         'sso_id',
+        'dosen_id',
     ];
 
     /**
@@ -46,5 +47,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Data dosen (tabel `dosen`) milik akun ini — hanya terisi untuk akun
+     * dengan role "dosen" yang berhasil ditautkan saat login SSO (lihat
+     * SsoController::cariDosenUntukUser()).
+     */
+    public function dosen()
+    {
+        return $this->belongsTo(Dosen::class, 'dosen_id');
     }
 }

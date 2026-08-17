@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Dosen;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,9 +21,12 @@ use Spatie\Permission\Models\Role;
  * access_token (/oauth/token) -> access_token dipakai ambil profil
  * (/api/user) -> user lokal RIS dicari/dibuat -> login.
  *
- * BEDA dengan SIKEMAH: RIS hanya menerima role "admin" dari SSO. Role
- * "dosen" dan "mahasiswa" ditolak (403) karena RIS belum punya dashboard
- * untuk peran tersebut.
+ * BEDA dengan SIKEMAH: RIS hanya menerima role "admin" dan "dosen" dari SSO.
+ * Role "mahasiswa" tetap ditolak (403) karena RIS belum punya dashboard
+ * untuk peran tersebut. Admin bisa melihat & mengelola seluruh data
+ * Publikasi Karya, sedangkan dosen hanya melihat/mengelola publikasi yang
+ * nama dia tercantum sebagai penulis (lihat
+ * PublikasiController::ownedAuthorIds()).
  *
  * STATUS: aktif hanya kalau SSO_ENABLED=true DAN semua kredensial di .env
  * terisi (lihat ssoAktif()). Selama itu belum terpenuhi, kedua route di sini
@@ -33,9 +37,9 @@ class SsoController extends Controller
 {
     /**
      * Role SSO yang boleh login ke RIS. Tambah di sini kalau nanti RIS
-     * punya dashboard untuk role lain (mis. "dosen").
+     * punya dashboard untuk role lain (mis. "mahasiswa").
      */
-    private const ALLOWED_ROLES = ['admin'];
+    private const ALLOWED_ROLES = ['admin', 'dosen'];
 
     /**
      * Redirect ke halaman login SSO UKRI.
@@ -108,12 +112,12 @@ class SsoController extends Controller
         $roles = $ssoUser['roles'] ?? [];
 
         if (! array_intersect(self::ALLOWED_ROLES, $roles)) {
-            // Termasuk role "dosen" / "mahasiswa" — RIS baru mendukung admin.
+            // Termasuk role "mahasiswa" — RIS baru mendukung admin & dosen.
             return redirect()->route('login')
-                ->with('error', 'Akun Anda tidak memiliki akses admin di RIS.');
+                ->with('error', 'Akun Anda tidak memiliki akses ke RIS.');
         }
 
-        $user = $this->carikanAtauBuatPengguna($ssoUser);
+        $user = $this->carikanAtauBuatPengguna($ssoUser, $roles);
 
         session(['sso_token' => $token]);
 
@@ -124,7 +128,9 @@ class SsoController extends Controller
             return redirect()->intended();
         }
 
-        return redirect()->route('dashboard');
+        // Dashboard (analitik seluruh data) hanya untuk admin — dosen
+        // diarahkan langsung ke daftar Publikasi Karya miliknya sendiri.
+        return redirect()->route($user->hasRole('admin') ? 'dashboard-analitik.index' : 'publikasi.index');
     }
 
     /**
@@ -200,10 +206,15 @@ class SsoController extends Controller
      * emailnya sama dengan email di SSO, akan otomatis tertaut & tidak
      * dibuatkan akun duplikat).
      *
-     * Role "admin" (Spatie) selalu di-sync di sini karena hanya role itu yang
-     * lolos pengecekan ALLOWED_ROLES di callback() — jadi aman untuk RIS.
+     * Role (Spatie) di-sync sesuai role dari SSO — "admin" diprioritaskan
+     * kalau akun punya keduanya, karena hanya role yang lolos
+     * ALLOWED_ROLES di callback() yang sampai ke sini. Untuk role "dosen",
+     * akun juga ditautkan ke baris `dosen` miliknya (dosen_id) supaya
+     * Publikasi Karya bisa dibatasi ke miliknya sendiri.
+     *
+     * @param  string[]  $roles  Role dari SSO (bisa lebih dari satu).
      */
-    private function carikanAtauBuatPengguna(array $ssoUser): User
+    private function carikanAtauBuatPengguna(array $ssoUser, array $roles): User
     {
         $ssoId = (string) ($ssoUser['username'] ?? $ssoUser['id'] ?? '');
         $email = (string) ($ssoUser['email'] ?? '');
@@ -224,10 +235,57 @@ class SsoController extends Controller
             $user->forceFill(['sso_id' => $ssoId])->save();
         }
 
-        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $user->syncRoles(['admin']);
+        $role = in_array('admin', $roles, true) ? 'admin' : 'dosen';
+
+        Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
+        $user->syncRoles([$role]);
+
+        if ($role === 'dosen') {
+            $user->forceFill([
+                'dosen_id' => $this->cariDosenUntukUser($ssoUser, $ssoId, $email),
+            ])->save();
+        }
 
         return $user;
+    }
+
+    /**
+     * Cari baris `dosen` yang cocok dengan akun SSO ini, supaya publikasi
+     * yang tampil bisa dibatasi ke milik dosen bersangkutan.
+     *
+     * Urutan pencocokan: `ukri_id` (id akun SSO, kalau berupa angka —
+     * paling akurat karena satu sumber identitas dengan Master Data API),
+     * lalu NIDN (kalau username SSO memang diisi NIDN), lalu email sebagai
+     * fallback terakhir. Return null kalau tidak ada yang cocok (mis. data
+     * dosennya belum sempat di-sync lewat `php artisan ukri:sync dosen`) —
+     * publikasi tetap tidak akan tampil ke akun ini sampai tertaut.
+     */
+    private function cariDosenUntukUser(array $ssoUser, string $ssoId, string $email): ?int
+    {
+        $ukriId = $ssoUser['id'] ?? null;
+
+        if (filled($ukriId) && is_numeric($ukriId)) {
+            $dosen = Dosen::where('ukri_id', $ukriId)->first();
+            if ($dosen) {
+                return $dosen->id;
+            }
+        }
+
+        if (filled($ssoId)) {
+            $dosen = Dosen::where('nidn', $ssoId)->first();
+            if ($dosen) {
+                return $dosen->id;
+            }
+        }
+
+        if (filled($email)) {
+            $dosen = Dosen::where('email', $email)->first();
+            if ($dosen) {
+                return $dosen->id;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -6,7 +6,7 @@
     <h1>Publikasi Karya</h1>
     <nav>
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ route('dashboard-analitik.index') }}">Home</a></li>
             <li class="breadcrumb-item active">Publikasi Karya</li>
         </ol>
     </nav>

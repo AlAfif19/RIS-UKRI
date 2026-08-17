@@ -2,18 +2,20 @@
 <aside id="sidebar" class="sidebar">
 
     <ul class="sidebar-nav" id="sidebar-nav">
-        {{-- Dashboard Analitik --}}
-        <li class="nav-item">
+        @role('admin|dosen')
+            {{-- Dashboard Analitik --}}
+            <li class="nav-item">
 
-            <a class="nav-link {{ request()->routeIs('dashboard-analitik.index') ? '' : 'collapsed' }}"
-            href="{{ route('dashboard-analitik.index') }}">
+                <a class="nav-link {{ request()->routeIs('dashboard-analitik.index') ? '' : 'collapsed' }}"
+                href="{{ route('dashboard-analitik.index') }}">
 
-                <i class="bi bi-bar-chart-line"></i>
-                <span>Dashboard Analitik</span>
+                    <i class="bi bi-bar-chart-line"></i>
+                    <span>Dashboard Analitik</span>
 
-            </a>
+                </a>
 
-        </li>
+            </li>
+        @endrole
 
         {{-- Publikasi Karya --}}
         <li class="nav-item">
@@ -27,21 +29,6 @@
             </a>
 
         </li>
-
-        @role('admin')
-            {{-- Dashboard --}}
-            <li class="nav-item">
-
-                <a class="nav-link {{ request()->routeIs('dashboard') ? '' : 'collapsed' }}"
-                href="{{ route('dashboard') }}">
-
-                    <i class="bi bi-grid"></i>
-                    <span>Dashboard</span>
-
-                </a>
-
-            </li>
-        @endrole
 
 
 

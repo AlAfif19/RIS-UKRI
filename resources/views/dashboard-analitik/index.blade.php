@@ -6,7 +6,7 @@
         <h1>Dashboard Analitik Publikasi Karya</h1>
         <nav>
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ route('dashboard-analitik.index') }}">Home</a></li>
                 <li class="breadcrumb-item active">Dashboard Analitik</li>
             </ol>
         </nav>
@@ -28,9 +28,9 @@
                             value="{{ request('tanggal_sampai') }}">
                     </div>
                     <div class="col-md-3 col-sm-6">
-                        <label class="form-label small fw-bold text-secondary">Perguruan Tinggi</label>
+                        <label class="form-label small fw-bold text-secondary">Afiliasi</label>
                         <select name="perguruan_tinggi_id" id="filter-perguruan-tinggi" class="form-select form-select-sm">
-                            <option value="">-- Semua Perguruan Tinggi --</option>
+                            <option value="">-- Semua Afiliasi --</option>
                             @foreach($perguruanTinggiList as $pt)
                                 <option value="{{ $pt->id }}" {{ request('perguruan_tinggi_id') == $pt->id ? 'selected' : '' }}>
                                     {{ $pt->nama_pt }}</option>
@@ -335,31 +335,31 @@
 
         <!-- Leaderboards Row 2 -->
         <div class="row g-3 mb-3">
-            <!-- 3. Perguruan Tinggi Kontributor -->
+            <!-- 3. Afiliasi Kontributor -->
             <div class="col-lg-6">
                 <div class="card border-0 shadow-sm h-100 bg-white">
                     <div class="card-body py-3">
                         <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-building text-info"></i> Kontribusi per
-                            Perguruan Tinggi</h6>
+                            Afiliasi</h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped align-middle small mb-0">
                                 <thead>
                                     <tr>
                                         <th style="width: 8%">No</th>
-                                        <th>Nama Perguruan Tinggi</th>
+                                        <th>Afiliasi</th>
                                         <th class="text-end" style="width: 25%">Total Kontribusi</th>
                                     </tr>
                                 </thead>
-                                <tbody id="tbody-top-pt">
-                                    @forelse($topPT as $idx => $pt)
+                                <tbody id="tbody-top-afiliasi">
+                                    @forelse($topAfiliasi as $idx => $afiliasi)
                                         <tr>
                                             <td>{{ $idx + 1 }}</td>
-                                            <td>{{ $pt->nama_pt }}</td>
-                                            <td class="text-end fw-bold text-info">{{ $pt->jumlah }}</td>
+                                            <td>{{ $afiliasi->afiliasi }}</td>
+                                            <td class="text-end fw-bold text-info">{{ $afiliasi->jumlah }}</td>
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="3" class="text-center text-muted">Belum ada data kontribusi PT.</td>
+                                            <td colspan="3" class="text-center text-muted">Belum ada data kontribusi afiliasi.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
@@ -670,6 +670,11 @@
             const resetLink = document.getElementById('filter-reset');
             let debounceTimer = null;
             let activeController = null; // untuk membatalkan request yang sudah usang
+            let requestSeq = 0; // penjaga tambahan: kalau respons lama (usang) telat
+                                 // datang SETELAH respons yang lebih baru (race
+                                 // condition jaringan), abort() saja tidak cukup -
+                                 // respons yang telat ini diabaikan lewat nomor urut,
+                                 // sama seperti pola di initJurnalSelect/cek-judul.
 
             function escapeHtml(str) {
                 return String(str ?? '').replace(/[&<>"']/g, (c) => ({
@@ -698,6 +703,7 @@
                 // batalkan request sebelumnya kalau masih berjalan (hindari race condition antar filter)
                 if (activeController) activeController.abort();
                 activeController = new AbortController();
+                const seq = ++requestSeq;
 
                 setLoading(true);
 
@@ -710,13 +716,19 @@
                 })
                     .then(res => res.json())
                     .then(data => {
+                        // Respons yang telat datang (nomor urutnya sudah dilewati
+                        // request lain yang lebih baru) diabaikan, walau
+                        // request-nya sendiri sempat lolos dari abort().
+                        if (seq !== requestSeq) return;
                         updateDashboard(data);
                         window.history.replaceState(null, '', url);
                     })
                     .catch(err => {
                         if (err.name !== 'AbortError') console.error('Filter dashboard error:', err);
                     })
-                    .finally(() => setLoading(false));
+                    .finally(() => {
+                        if (seq === requestSeq) setLoading(false);
+                    });
             }
 
             function updateDashboard(data) {
@@ -755,15 +767,15 @@
                     </tr>
                 `).join('') : `<tr><td colspan="5" class="text-center text-muted">Belum ada data kontribusi.</td></tr>`;
 
-                // Top PT
-                const tbodyPT = document.getElementById('tbody-top-pt');
-                tbodyPT.innerHTML = data.topPT.length ? data.topPT.map((pt, idx) => `
+                // Top Afiliasi
+                const tbodyAfiliasi = document.getElementById('tbody-top-afiliasi');
+                tbodyAfiliasi.innerHTML = data.topAfiliasi.length ? data.topAfiliasi.map((a, idx) => `
                     <tr>
                         <td>${idx + 1}</td>
-                        <td>${escapeHtml(pt.nama_pt)}</td>
-                        <td class="text-end fw-bold text-info">${pt.jumlah}</td>
+                        <td>${escapeHtml(a.afiliasi)}</td>
+                        <td class="text-end fw-bold text-info">${a.jumlah}</td>
                     </tr>
-                `).join('') : `<tr><td colspan="3" class="text-center text-muted">Belum ada data kontribusi PT.</td></tr>`;
+                `).join('') : `<tr><td colspan="3" class="text-center text-muted">Belum ada data kontribusi afiliasi.</td></tr>`;
 
                 // Top Jurnal
                 const tbodyJurnal = document.getElementById('tbody-top-jurnal');

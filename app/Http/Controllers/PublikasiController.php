@@ -8,7 +8,6 @@ use App\Models\PublikasiPenulisDosen;
 use App\Models\PublikasiPenulisMahasiswa;
 use App\Models\PublikasiPenulisLain;
 use App\Models\MasterAktivitasLitabmas;
-use App\Models\MasterPerguruanTinggi;
 use App\Models\Dosen;
 use App\Models\Mahasiswa;
 use Illuminate\Http\Request;
@@ -92,7 +91,7 @@ class PublikasiController extends Controller
         }
 
         // 2. Minimum 1 author from Penulis Dosen OR Penulis Mahasiswa
-        $dosenAuthors = array_filter($request->input('penulis_dosen', []), fn($item) => !empty($item['nama_dosen']));
+        $dosenAuthors = array_filter($request->input('penulis_dosen', []), fn($item) => !empty($item['dosen_id']));
         $mahasiswaAuthors = array_filter($request->input('penulis_mahasiswa', []), fn($item) => !empty($item['mahasiswa_id']));
 
         if (count($dosenAuthors) === 0 && count($mahasiswaAuthors) === 0) {
@@ -159,42 +158,20 @@ class PublikasiController extends Controller
                 }
             }
 
-            // Save Penulis Dosen
+            // Save Penulis Dosen (dipilih dari dropdown data dosen yang sudah
+            // ada di master data, sama seperti Penulis Mahasiswa - bukan
+            // input manual NIDN/nama/PT lagi)
             if ($request->has('penulis_dosen') && is_array($request->penulis_dosen)) {
                 foreach ($request->penulis_dosen as $idx => $dosenInput) {
-                    if (empty($dosenInput['nama_dosen'])) continue;
+                    if (empty($dosenInput['dosen_id'])) continue;
 
-                    $ptId = null;
-                    if (!empty($dosenInput['nama_pt'])) {
-                        $pt = MasterPerguruanTinggi::firstOrCreate([
-                            'nama_pt' => $dosenInput['nama_pt']
-                        ]);
-                        $ptId = $pt->id;
-                    }
-
-                    $dosen = null;
-                    if (!empty($dosenInput['nidn'])) {
-                        $dosen = Dosen::where('nidn', $dosenInput['nidn'])->first();
-                    }
-
-                    if (!$dosen) {
-                        $nidn = !empty($dosenInput['nidn']) ? $dosenInput['nidn'] : 'TEMP_' . str_replace('.', '', microtime(true)) . '_' . mt_rand(100, 999);
-                        $dosen = Dosen::create([
-                            'nama' => $dosenInput['nama_dosen'],
-                            'nidn' => $nidn,
-                            'master_perguruan_tinggi_id' => $ptId,
-                        ]);
-                    } else {
-                        $dosen->update([
-                            'nama' => $dosenInput['nama_dosen'],
-                            'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
-                        ]);
-                    }
+                    $dosen = Dosen::find($dosenInput['dosen_id']);
+                    if (!$dosen) continue;
 
                     $key = "dosen_{$idx}";
                     PublikasiPenulisDosen::create([
                         'publikasi_id' => $publikasi->id,
-                        'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
+                        'master_perguruan_tinggi_id' => $dosen->master_perguruan_tinggi_id,
                         'dosen_id' => $dosen->id,
                         'urutan' => $dosenInput['urutan'] ?? ($idx + 1),
                         'afiliasi' => $dosenInput['afiliasi'] ?? null,
@@ -285,7 +262,7 @@ class PublikasiController extends Controller
             'penulis_lain.*.urutan' => 'nullable|integer|min:1',
         ]);
 
-        $dosenAuthors = array_filter($request->input('penulis_dosen', []), fn($item) => !empty($item['nama_dosen']));
+        $dosenAuthors = array_filter($request->input('penulis_dosen', []), fn($item) => !empty($item['dosen_id']));
         $mahasiswaAuthors = array_filter($request->input('penulis_mahasiswa', []), fn($item) => !empty($item['mahasiswa_id']));
 
         if (count($dosenAuthors) === 0 && count($mahasiswaAuthors) === 0) {
@@ -350,43 +327,20 @@ class PublikasiController extends Controller
                 }
             }
 
-            // Sync Penulis Dosen
+            // Sync Penulis Dosen (dipilih dari dropdown data dosen, sama
+            // seperti Penulis Mahasiswa - bukan input manual NIDN/nama/PT lagi)
             $publikasi->penulisDosen()->delete();
             if ($request->has('penulis_dosen') && is_array($request->penulis_dosen)) {
                 foreach ($request->penulis_dosen as $idx => $dosenInput) {
-                    if (empty($dosenInput['nama_dosen'])) continue;
+                    if (empty($dosenInput['dosen_id'])) continue;
 
-                    $ptId = null;
-                    if (!empty($dosenInput['nama_pt'])) {
-                        $pt = MasterPerguruanTinggi::firstOrCreate([
-                            'nama_pt' => $dosenInput['nama_pt']
-                        ]);
-                        $ptId = $pt->id;
-                    }
-
-                    $dosen = null;
-                    if (!empty($dosenInput['nidn'])) {
-                        $dosen = Dosen::where('nidn', $dosenInput['nidn'])->first();
-                    }
-
-                    if (!$dosen) {
-                        $nidn = !empty($dosenInput['nidn']) ? $dosenInput['nidn'] : 'TEMP_' . str_replace('.', '', microtime(true)) . '_' . mt_rand(100, 999);
-                        $dosen = Dosen::create([
-                            'nama' => $dosenInput['nama_dosen'],
-                            'nidn' => $nidn,
-                            'master_perguruan_tinggi_id' => $ptId,
-                        ]);
-                    } else {
-                        $dosen->update([
-                            'nama' => $dosenInput['nama_dosen'],
-                            'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
-                        ]);
-                    }
+                    $dosen = Dosen::find($dosenInput['dosen_id']);
+                    if (!$dosen) continue;
 
                     $key = "dosen_{$idx}";
                     PublikasiPenulisDosen::create([
                         'publikasi_id' => $publikasi->id,
-                        'master_perguruan_tinggi_id' => $ptId ?: $dosen->master_perguruan_tinggi_id,
+                        'master_perguruan_tinggi_id' => $dosen->master_perguruan_tinggi_id,
                         'dosen_id' => $dosen->id,
                         'urutan' => $dosenInput['urutan'] ?? ($idx + 1),
                         'afiliasi' => $dosenInput['afiliasi'] ?? null,
@@ -524,6 +478,91 @@ class PublikasiController extends Controller
         return response()->json(
             Mahasiswa::orderBy('nama')->get(['id', 'nim', 'nama', 'prodi'])
         );
+    }
+
+    /**
+     * Semua dosen (mirror lokal Master Data API UKRI + dosen eksternal yang
+     * pernah diinput manual), untuk dropdown pencarian di form Publikasi
+     * Karya (create.blade.php / edit.blade.php) - dibuat sama seperti
+     * apiAllMahasiswa(): seluruh data dimuat sekali saat form dibuka, lalu
+     * pencocokan NIDN/nama dilakukan di browser (Tom Select).
+     */
+    public function apiAllDosen()
+    {
+        return response()->json(
+            Dosen::with(['prodi:id,nama_prodi'])
+                ->orderBy('nama')
+                ->get(['id', 'nidn', 'nama', 'prodi_id'])
+        );
+    }
+
+    /**
+     * Semua nama jurnal yang pernah dientri di publikasi (SELURUH dosen, tidak
+     * dibatasi seperti index() yang membatasi dosen non-admin hanya melihat
+     * publikasinya sendiri) - dipakai untuk autocomplete field "Nama Jurnal"
+     * di form Publikasi Karya, supaya pengetikan yang mirip nama jurnal yang
+     * sudah pernah ada bisa langsung dipilih (menghindari data ganda karena
+     * beda kapitalisasi/spasi/singkatan), sekaligus tetap bisa mengetik nama
+     * baru kalau memang belum pernah ada. Sama seperti apiAllDosen() /
+     * apiAllMahasiswa(): seluruh daftar dimuat sekali saat form dibuka, lalu
+     * pencocokan dilakukan di browser (Tom Select) supaya tidak ada request
+     * ke server tiap huruf diketik.
+     */
+    public function apiAllJurnal()
+    {
+        $daftar = Publikasi::whereNotNull('nama_jurnal')
+            ->where('nama_jurnal', '<>', '')
+            ->select('nama_jurnal')
+            ->get()
+            // Disamakan dulu (trim + lower) supaya variasi spasi/kapitalisasi
+            // ("Jurnal ABC" vs "jurnal abc ") dianggap satu nama jurnal yang
+            // sama, baru diambil salah satu bentuk penulisan aslinya.
+            ->groupBy(fn ($row) => \Illuminate\Support\Str::lower(trim($row->nama_jurnal)))
+            ->map(fn ($rows) => trim($rows->first()->nama_jurnal))
+            ->values()
+            ->sort(fn ($a, $b) => strcasecmp($a, $b))
+            ->values();
+
+        return response()->json($daftar);
+    }
+
+    /**
+     * Cek kemiripan Judul Artikel terhadap SELURUH judul publikasi yang
+     * sudah ada di DB (lintas dosen/mahasiswa - bukan cuma milik penulis
+     * yang sedang login/dipilih di form), supaya submit ganda untuk judul
+     * yang sama tidak lolos hanya karena diinput oleh dosen yang berbeda.
+     * Dipakai oleh input #judul di create.blade.php / edit.blade.php:
+     * makin panjang & spesifik teks yang diketik, makin sedikit (atau makin
+     * mirip) hasil yang balik - kalau sampai kosong berarti belum ada judul
+     * yang mirip (aman dianggap judul baru).
+     */
+    public function apiSearchJudul(Request $request)
+    {
+        $q = trim((string) $request->q);
+
+        // Selaras dengan MIN_CHARS di JS (create/edit.blade.php) - dulu beda
+        // (backend 5, frontend sekarang mulai narik hasil dari 3 huruf),
+        // jadi ketikan 3-4 huruf sempat tidak menghasilkan apa-apa walau
+        // sudah di atas ambang batas frontend.
+        if (mb_strlen($q) < 3) {
+            return response()->json([]);
+        }
+
+        $query = Publikasi::query()
+            ->where('judul', 'like', '%' . $q . '%');
+
+        // Saat edit, judul publikasi yang sedang diedit sendiri jangan ikut
+        // dianggap "mirip" dengan dirinya sendiri.
+        if ($request->filled('exclude_id')) {
+            $query->where('id', '<>', $request->exclude_id);
+        }
+
+        $hasil = $query
+            ->orderByRaw('LENGTH(judul) asc')
+            ->limit(8)
+            ->get(['id', 'judul', 'nama_jurnal', 'tanggal_terbit']);
+
+        return response()->json($hasil);
     }
 
     private function checkAccess(Publikasi $publikasi)

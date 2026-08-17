@@ -16,9 +16,21 @@ use App\Http\Controllers\MasterDataController;
 |
 | SSO Server Landing Page
 |
+| Sengaja TIDAK pakai Route::redirect('/', '/login') lagi - itu menambah
+| satu hop redirect ekstra ('/' -> '/login') yang lalu diteruskan LAGI oleh
+| middleware `guest` ke halaman dashboard kalau user ternyata sudah login.
+| Kalau suatu saat route bernama "dashboard" tidak ada/berubah, fallback
+| bawaan middleware `guest` (Illuminate\Auth\Middleware\RedirectIfAuthenticated)
+| akan balik lagi ke '/' - dan berulang terus (ERR_TOO_MANY_REDIRECTS).
+| Di bawah ini langsung menentukan tujuannya dalam SATU kali redirect saja,
+| tidak bergantung pada fallback middleware `guest` sama sekali.
 */
 
-Route::redirect('/', '/login');
+Route::get('/', function () {
+    return auth()->check()
+        ? redirect()->route('dashboard-analitik.index')
+        : redirect()->route('login');
+});
 
 
 
@@ -42,6 +54,26 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Guest Login (LOCAL DEV ONLY)
+|--------------------------------------------------------------------------
+|
+| Shortcut login (tanpa SSO) untuk testing role admin/dosen di mesin
+| lokal. Logikanya sengaja ditaruh di routes/dev-login.php, sebuah file
+| yang di-gitignore (lihat .gitignore) supaya tidak pernah ter-commit
+| atau ter-push. File itu tidak ada di repo — kalau tidak ada, blok ini
+| tidak melakukan apa-apa, jadi aman di production maupun setelah pull.
+*/
+
+if (app()->environment('local')) {
+    $devLoginRoutes = base_path('routes/dev-login.php');
+
+    if (is_file($devLoginRoutes)) {
+        require $devLoginRoutes;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Authenticated Routes
 |--------------------------------------------------------------------------
 */
@@ -59,6 +91,43 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Publikasi Karya Routes (Admin & Dosen)
+|--------------------------------------------------------------------------
+|
+| Bisa diakses Admin maupun Dosen (role dari SSO) — WAJIB login DAN WAJIB
+| salah satu dari role tersebut. Pembatasan datanya sendiri (dosen hanya
+| lihat publikasi yang nama dia tercantum sebagai penulis, admin lihat
+| semuanya) ditangani di dalam PublikasiController, bukan di sini — lihat
+| PublikasiController::ownedAuthorIds().
+|
+*/
+
+Route::middleware(['auth', 'role:admin|dosen'])->group(function () {
+
+    Route::resource('publikasi', PublikasiController::class);
+    Route::delete('/publikasi-dokumen/{dokumen}', [PublikasiController::class, 'destroyDokumen'])->name('publikasi.dokumen.destroy');
+    Route::get('/api/dosen/search', [PublikasiController::class, 'apiSearchDosen'])->name('api.dosen.search');
+    Route::get('/api/dosen/all', [PublikasiController::class, 'apiAllDosen'])->name('api.dosen.all');
+    Route::get('/api/mahasiswa/search', [PublikasiController::class, 'apiSearchMahasiswa'])->name('api.mahasiswa.search');
+    Route::get('/api/mahasiswa/all', [PublikasiController::class, 'apiAllMahasiswa'])->name('api.mahasiswa.all');
+    Route::get('/api/jurnal/all', [PublikasiController::class, 'apiAllJurnal'])->name('api.jurnal.all');
+    Route::get('/api/publikasi/cek-judul', [PublikasiController::class, 'apiSearchJudul'])->name('api.publikasi.cek-judul');
+
+    // Dashboard Analitik — bisa diakses admin maupun dosen. Datanya sendiri
+    // dibatasi di dalam DashboardAnalitikController: admin lihat semua,
+    // dosen hanya lihat statistik dari publikasi yang dia tercantum sebagai
+    // penulis (lihat DashboardAnalitikController::currentDosenId()).
+    //
+    // Sebelumnya ada JUGA route '/dashboard' (name: 'dashboard') yang
+    // mengarah ke controller & view yang SAMA PERSIS - jadi menu sidebar
+    // punya 2 item ("Dashboard Analitik" & "Dashboard") yang isinya
+    // identik. Route duplikatnya sudah dihapus, cukup satu ini saja.
+    Route::get('/dashboard-analitik', [DashboardAnalitikController::class, 'index'])->name('dashboard-analitik.index');
+
+});
+
+/*
+|--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
 |
@@ -70,20 +139,6 @@ Route::middleware('auth')->group(function () {
 */
 
 Route::middleware(['auth', 'admin'])->group(function () {
-
-    Route::get('/dashboard', [DashboardAnalitikController::class, 'index'])->name('dashboard');
-    Route::get('/dashboard-analitik', [DashboardAnalitikController::class, 'index'])->name('dashboard-analitik.index');
-
-    /*
-    |----------------------------------------------------------------------
-    | Publikasi Karya Routes
-    |----------------------------------------------------------------------
-    */
-    Route::resource('publikasi', PublikasiController::class);
-    Route::delete('/publikasi-dokumen/{dokumen}', [PublikasiController::class, 'destroyDokumen'])->name('publikasi.dokumen.destroy');
-    Route::get('/api/dosen/search', [PublikasiController::class, 'apiSearchDosen'])->name('api.dosen.search');
-    Route::get('/api/mahasiswa/search', [PublikasiController::class, 'apiSearchMahasiswa'])->name('api.mahasiswa.search');
-    Route::get('/api/mahasiswa/all', [PublikasiController::class, 'apiAllMahasiswa'])->name('api.mahasiswa.all');
 
     /*
     |----------------------------------------------------------------------

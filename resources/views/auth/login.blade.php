@@ -46,6 +46,23 @@
             </div>
         @endif
 
+        {{-- Guest login lokal — hanya muncul kalau routes/dev-login.php ada
+             (file itu di-gitignore, tidak pernah ikut ter-push). Aman
+             ditinggal di view ini karena di production route-nya tidak
+             pernah terdaftar. --}}
+        @if (Route::has('dev-login'))
+            <hr class="my-3">
+            <p class="text-center small text-muted mb-2">Guest Login (khusus lokal)</p>
+            <div class="d-grid gap-2">
+                <a href="{{ route('dev-login', 'admin') }}" class="btn btn-outline-secondary btn-sm">
+                    Masuk sebagai Admin
+                </a>
+                <a href="{{ route('dev-login', 'dosen') }}" class="btn btn-outline-secondary btn-sm">
+                    Masuk sebagai Dosen
+                </a>
+            </div>
+        @endif
+
     </div>
 
 </div>
